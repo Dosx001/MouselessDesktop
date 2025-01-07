@@ -7,17 +7,26 @@ const c = @cImport({
 
 pub fn main() !void {
     _ = c.atspi_init();
-    const desktop: ?*c.AtspiAccessible = c.atspi_get_desktop(0);
-    var app: ?*c.AtspiAccessible = null;
-    for (0..@intCast(c.atspi_accessible_get_child_count(desktop, null))) |i| {
-        app = c.atspi_accessible_get_child_at_index(desktop, @intCast(i), null);
-        c.g_print(
-            "(Index, application, application_child_count)=(%d,%s,%d)\n",
-            i,
-            c.atspi_accessible_get_name(app, null),
-            c.atspi_accessible_get_child_count(app, null),
-        );
-        c.g_object_unref(app);
+    while (true) : (std.time.sleep(3 * std.time.ns_per_s)) {
+        for (0..@intCast(c.atspi_get_desktop_count())) |i| {
+            const desktop: ?*c.AtspiAccessible = c.atspi_get_desktop(@intCast(i));
+            for (0..@intCast(c.atspi_accessible_get_child_count(desktop, null))) |j| {
+                const app = c.atspi_accessible_get_child_at_index(desktop, @intCast(j), null);
+                for (0..@intCast(c.atspi_accessible_get_child_count(app, null))) |k| {
+                    const win = c.atspi_accessible_get_child_at_index(app, @intCast(k), null);
+                    const state_set = c.atspi_accessible_get_state_set(win);
+                    if (c.atspi_state_set_contains(state_set, c.ATSPI_STATE_ACTIVE) == 1) {
+                        c.g_print(
+                            "%s\n",
+                            c.atspi_accessible_get_name(app, null),
+                        );
+                    }
+                    c.g_object_unref(win);
+                    c.g_object_unref(state_set);
+                }
+                c.g_object_unref(app);
+            }
+        }
     }
     return;
 }
