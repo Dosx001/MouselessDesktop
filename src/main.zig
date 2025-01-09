@@ -1,7 +1,5 @@
 const std = @import("std");
 const c = @cImport({
-    @cInclude("dbus-1.0/dbus/dbus.h");
-    @cInclude("glib-2.0/glib.h");
     @cInclude("at-spi-2.0/atspi/atspi.h");
 });
 

@@ -36,11 +36,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    exe.linkSystemLibrary("atspi");
-    exe.linkSystemLibrary("c");
-    exe.linkSystemLibrary("dbus-1");
-    exe.linkSystemLibrary("glib-2.0");
-    exe.linkSystemLibrary("gobject-2.0");
+    exe.linkLibC();
+    exe.linkSystemLibrary("atspi-2");
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
