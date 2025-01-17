@@ -37,6 +37,7 @@ pub fn build(b: *std.Build) void {
     });
 
     exe.linkLibC();
+    exe.linkSystemLibrary("X11");
     exe.linkSystemLibrary("atspi-2");
 
     // This declares intent for the executable to be installed into the
