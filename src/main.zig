@@ -6,6 +6,8 @@ const c = @cImport({
     @cInclude("libappindicator3-0.1/libappindicator/app-indicator.h");
 });
 
+var RUNNING: bool = true;
+
 pub fn main() !void {
     var argc: c_int = 0;
     var argv: [*c][*c]u8 = undefined;
@@ -27,7 +29,14 @@ pub fn main() !void {
     c.gtk_widget_show_all(menu);
     c.app_indicator_set_menu(app, @ptrCast(menu));
     c.app_indicator_set_status(app, c.APP_INDICATOR_STATUS_ACTIVE);
+    const thread = std.Thread.spawn(.{}, hotkey, .{&RUNNING}) catch unreachable;
     c.gtk_main();
+    RUNNING = false;
+    thread.join();
+    return;
+}
+
+fn hotkey(run: *bool) !void {
     const display = c.XOpenDisplay(null);
     defer _ = c.XCloseDisplay(display);
     if (display == null) {
@@ -56,12 +65,13 @@ pub fn main() !void {
             c.GrabModeAsync,
             c.GrabModeAsync,
         );
-    defer inline for (modifiers) |modifier|
-        c.XUngrabKey(display, keycode, modifier, root);
+    defer inline for (modifiers) |modifier| {
+        _ = c.XUngrabKey(display, keycode, modifier, root);
+    };
     _ = c.XSelectInput(display, root, c.KeyPressMask);
     _ = c.atspi_init();
     var event: c.XEvent = undefined;
-    while (true) {
+    while (run.*) {
         while (0 < c.XPending(display)) {
             _ = c.XNextEvent(display, &event);
             if (event.type == c.KeyPress) {
@@ -69,7 +79,6 @@ pub fn main() !void {
             }
         }
     }
-    return;
 }
 
 fn g_signal_connect(
