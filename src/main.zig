@@ -3,9 +3,31 @@ const c = @cImport({
     @cInclude("X11/Xlib.h");
     @cInclude("X11/keysym.h");
     @cInclude("at-spi-2.0/atspi/atspi.h");
+    @cInclude("libappindicator3-0.1/libappindicator/app-indicator.h");
 });
 
 pub fn main() !void {
+    var argc: c_int = 0;
+    var argv: [*c][*c]u8 = undefined;
+    c.gtk_init(&argc, &argv);
+    const window = c.gtk_window_new(c.GTK_WINDOW_TOPLEVEL);
+    const w: *c.GtkWindow = @ptrCast(window);
+    c.gtk_window_fullscreen(w);
+    c.gtk_window_present(w);
+    c.gtk_widget_set_opacity(window, 0.4);
+    const app = c.app_indicator_new(
+        "Mouseless Desktop",
+        "application-exit",
+        c.APP_INDICATOR_CATEGORY_APPLICATION_STATUS,
+    );
+    const menu = c.gtk_menu_new();
+    const quit = c.gtk_menu_item_new_with_label("Quit");
+    _ = g_signal_connect(quit, "activate", @ptrCast(&on_quit), null);
+    c.gtk_menu_shell_append(@ptrCast(menu), @ptrCast(quit));
+    c.gtk_widget_show_all(menu);
+    c.app_indicator_set_menu(app, @ptrCast(menu));
+    c.app_indicator_set_status(app, c.APP_INDICATOR_STATUS_ACTIVE);
+    c.gtk_main();
     const display = c.XOpenDisplay(null);
     defer _ = c.XCloseDisplay(display);
     if (display == null) {
@@ -48,6 +70,28 @@ pub fn main() !void {
         }
     }
     return;
+}
+
+fn g_signal_connect(
+    instance: c.gpointer,
+    detailed_signal: [*c]const c.gchar,
+    c_handler: c.GCallback,
+    data: c.gpointer,
+) c.gulong {
+    var zero: u32 = 0;
+    const flags: *c.GConnectFlags = @ptrCast(&zero);
+    return c.g_signal_connect_data(
+        instance,
+        detailed_signal,
+        c_handler,
+        data,
+        null,
+        flags.*,
+    );
+}
+
+fn on_quit(_: ?*c.GtkMenuItem, _: ?*c.gpointer) void {
+    c.gtk_main_quit();
 }
 
 fn print_tree() void {
