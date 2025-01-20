@@ -13,6 +13,7 @@ pub fn main() !void {
     var argv: [*c][*c]u8 = undefined;
     c.gtk_init(&argc, &argv);
     const window = c.gtk_window_new(c.GTK_WINDOW_TOPLEVEL);
+    g_signal_connect(window, "delete-event", @ptrCast(&c.gtk_widget_hide_on_delete), null);
     const w: *c.GtkWindow = @ptrCast(window);
     const screen = c.gtk_window_get_screen(w);
     const visual = c.gdk_screen_get_rgba_visual(screen);
@@ -43,14 +44,14 @@ pub fn main() !void {
     c.gtk_widget_show_all(menu);
     c.app_indicator_set_menu(app, @ptrCast(menu));
     c.app_indicator_set_status(app, c.APP_INDICATOR_STATUS_ACTIVE);
-    const thread = std.Thread.spawn(.{}, hotkey, .{&RUNNING}) catch unreachable;
+    const thread = std.Thread.spawn(.{}, hotkey, .{ &RUNNING, window }) catch unreachable;
     c.gtk_main();
     RUNNING = false;
     thread.join();
     return;
 }
 
-fn hotkey(run: *bool) !void {
+fn hotkey(run: *bool, widget: *c.GtkWidget) !void {
     const display = c.XOpenDisplay(null);
     defer _ = c.XCloseDisplay(display);
     if (display == null) {
@@ -89,6 +90,7 @@ fn hotkey(run: *bool) !void {
         while (0 < c.XPending(display)) {
             _ = c.XNextEvent(display, &event);
             if (event.type == c.KeyPress) {
+                c.gtk_widget_show_all(widget);
                 print_tree();
             }
         }
