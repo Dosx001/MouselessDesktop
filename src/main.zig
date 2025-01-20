@@ -38,7 +38,7 @@ pub fn main() !void {
     );
     const menu = c.gtk_menu_new();
     const quit = c.gtk_menu_item_new_with_label("Quit");
-    _ = g_signal_connect(quit, "activate", @ptrCast(&on_quit), null);
+    g_signal_connect(quit, "activate", @ptrCast(&on_quit), null);
     c.gtk_menu_shell_append(@ptrCast(menu), @ptrCast(quit));
     c.gtk_widget_show_all(menu);
     c.app_indicator_set_menu(app, @ptrCast(menu));
@@ -100,16 +100,14 @@ fn g_signal_connect(
     detailed_signal: [*c]const c.gchar,
     c_handler: c.GCallback,
     data: c.gpointer,
-) c.gulong {
-    var zero: u32 = 0;
-    const flags: *c.GConnectFlags = @ptrCast(&zero);
-    return c.g_signal_connect_data(
+) void {
+    _ = c.g_signal_connect_data(
         instance,
         detailed_signal,
         c_handler,
         data,
         null,
-        flags.*,
+        0,
     );
 }
 
