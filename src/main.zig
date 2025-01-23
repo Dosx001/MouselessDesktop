@@ -31,7 +31,6 @@ pub fn main() !void {
         c.GTK_STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
     c.gtk_window_fullscreen(w);
-    c.gtk_window_present(w);
     const app = c.app_indicator_new(
         "Mouseless Desktop",
         "application-exit",
@@ -130,10 +129,7 @@ fn print_tree(window: *c.GtkWidget) void {
                 defer c.g_object_unref(win);
                 const states = c.atspi_accessible_get_state_set(win);
                 defer c.g_object_unref(states);
-                const name = c.atspi_accessible_get_name(app, null);
-                defer c.g_free(name);
                 if (c.atspi_state_set_contains(states, c.ATSPI_STATE_ACTIVE) == 1) {
-                    c.g_print("%s\n", name);
                     print_child(@ptrCast(fixed), win);
                     return;
                 }
@@ -144,22 +140,39 @@ fn print_tree(window: *c.GtkWidget) void {
 
 fn print_child(container: [*c]c.GtkContainer, obj: ?*c.AtspiAccessible) void {
     if (obj == null) return;
-    const role = c.atspi_accessible_get_role_name(obj, null);
-    defer c.g_free(role);
-    const pos = c.atspi_component_get_position(
-        c.atspi_accessible_get_component_iface(obj),
-        c.ATSPI_COORD_TYPE_SCREEN,
-        null,
-    );
-    defer c.g_free(pos);
-    const gstring: [*c]u8 = @ptrCast(c.g_malloc(258));
-    _ = c.sprintf(gstring, "(%d, %d)", pos.*.x, pos.*.y);
-    const label = c.gtk_label_new(gstring);
-    c.gtk_fixed_put(@ptrCast(container), label, pos.*.x, pos.*.y);
+    const role = c.atspi_accessible_get_role(obj, null);
+    if (check_role(role)) {
+        const pos = c.atspi_component_get_position(
+            c.atspi_accessible_get_component_iface(obj),
+            c.ATSPI_COORD_TYPE_SCREEN,
+            null,
+        );
+        defer c.g_free(pos);
+        const gstring: [*c]u8 = @ptrCast(c.g_malloc(8));
+        _ = c.sprintf(gstring, "(%d, %d)", pos.*.x, pos.*.y);
+        const label = c.gtk_label_new(gstring);
+        c.gtk_fixed_put(@ptrCast(container), label, pos.*.x, pos.*.y);
+    }
     for (0..@intCast(c.atspi_accessible_get_child_count(obj, null))) |i| {
         print_child(
             container,
             c.atspi_accessible_get_child_at_index(obj, @intCast(i), null),
         );
     }
+}
+
+fn check_role(role: c_uint) bool {
+    return switch (role) {
+        c.ATSPI_ROLE_CHECK_BOX,
+        c.ATSPI_ROLE_LINK,
+        c.ATSPI_ROLE_LIST_ITEM,
+        c.ATSPI_ROLE_MENU_ITEM,
+        c.ATSPI_ROLE_PAGE_TAB,
+        c.ATSPI_ROLE_PUSH_BUTTON,
+        c.ATSPI_ROLE_PUSH_BUTTON_MENU,
+        c.ATSPI_ROLE_RADIO_BUTTON,
+        c.ATSPI_ROLE_TOGGLE_BUTTON,
+        => true,
+        else => false,
+    };
 }
