@@ -51,7 +51,7 @@ pub fn main() !void {
     return;
 }
 
-fn hotkey(run: *bool, widget: *c.GtkWidget) !void {
+fn hotkey(run: *bool, window: *c.GtkWidget) !void {
     const display = c.XOpenDisplay(null);
     defer _ = c.XCloseDisplay(display);
     if (display == null) {
@@ -90,8 +90,8 @@ fn hotkey(run: *bool, widget: *c.GtkWidget) !void {
         while (0 < c.XPending(display)) {
             _ = c.XNextEvent(display, &event);
             if (event.type == c.KeyPress) {
-                c.gtk_widget_show_all(widget);
-                print_tree();
+                print_tree(window);
+                c.gtk_widget_show_all(window);
             }
         }
     }
@@ -117,7 +117,9 @@ fn on_quit(_: ?*c.GtkMenuItem, _: ?*c.gpointer) void {
     c.gtk_main_quit();
 }
 
-fn print_tree() void {
+fn print_tree(window: *c.GtkWidget) void {
+    const fixed = c.gtk_fixed_new();
+    c.gtk_container_add(@ptrCast(window), fixed);
     for (0..@intCast(c.atspi_get_desktop_count())) |i| {
         const desktop: ?*c.AtspiAccessible = c.atspi_get_desktop(@intCast(i));
         for (0..@intCast(c.atspi_accessible_get_child_count(desktop, null))) |j| {
@@ -132,7 +134,7 @@ fn print_tree() void {
                 defer c.g_free(name);
                 if (c.atspi_state_set_contains(states, c.ATSPI_STATE_ACTIVE) == 1) {
                     c.g_print("%s\n", name);
-                    print_child(win, 0);
+                    print_child(@ptrCast(fixed), win);
                     return;
                 }
             }
@@ -140,11 +142,8 @@ fn print_tree() void {
     }
 }
 
-fn print_child(obj: ?*c.AtspiAccessible, padding: usize) void {
+fn print_child(container: [*c]c.GtkContainer, obj: ?*c.AtspiAccessible) void {
     if (obj == null) return;
-    for (0..padding) |_| c.g_print(" ");
-    const name = c.atspi_accessible_get_name(obj, null);
-    defer c.g_free(name);
     const role = c.atspi_accessible_get_role_name(obj, null);
     defer c.g_free(role);
     const pos = c.atspi_component_get_position(
@@ -153,14 +152,14 @@ fn print_child(obj: ?*c.AtspiAccessible, padding: usize) void {
         null,
     );
     defer c.g_free(pos);
-    c.g_print(
-        "(%s): %s, %d, %d\n",
-        name,
-        role,
-        pos.*.x,
-        pos.*.y,
-    );
+    const gstring: [*c]u8 = @ptrCast(c.g_malloc(258));
+    _ = c.sprintf(gstring, "(%d, %d)", pos.*.x, pos.*.y);
+    const label = c.gtk_label_new(gstring);
+    c.gtk_fixed_put(@ptrCast(container), label, pos.*.x, pos.*.y);
     for (0..@intCast(c.atspi_accessible_get_child_count(obj, null))) |i| {
-        print_child(c.atspi_accessible_get_child_at_index(obj, @intCast(i), null), padding + 2);
+        print_child(
+            container,
+            c.atspi_accessible_get_child_at_index(obj, @intCast(i), null),
+        );
     }
 }
