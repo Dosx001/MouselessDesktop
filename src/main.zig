@@ -142,16 +142,26 @@ fn print_child(container: [*c]c.GtkContainer, obj: ?*c.AtspiAccessible) void {
     if (obj == null) return;
     const role = c.atspi_accessible_get_role(obj, null);
     if (check_role(role)) {
-        const pos = c.atspi_component_get_position(
-            c.atspi_accessible_get_component_iface(obj),
-            c.ATSPI_COORD_TYPE_SCREEN,
-            null,
-        );
-        defer c.g_free(pos);
-        const gstring: [*c]u8 = @ptrCast(c.g_malloc(8));
-        _ = c.sprintf(gstring, "(%d, %d)", pos.*.x, pos.*.y);
-        const label = c.gtk_label_new(gstring);
-        c.gtk_fixed_put(@ptrCast(container), label, pos.*.x, pos.*.y);
+        const states = c.atspi_accessible_get_state_set(obj);
+        defer c.g_object_unref(states);
+        if (c.atspi_state_set_contains(
+            states,
+            c.ATSPI_STATE_VISIBLE,
+        ) == 1 and c.atspi_state_set_contains(
+            states,
+            c.ATSPI_STATE_SHOWING,
+        ) == 1) {
+            const pos = c.atspi_component_get_position(
+                c.atspi_accessible_get_component_iface(obj),
+                c.ATSPI_COORD_TYPE_SCREEN,
+                null,
+            );
+            defer c.g_free(pos);
+            const gstring: [*c]u8 = @ptrCast(c.g_malloc(8));
+            _ = c.sprintf(gstring, "(%d, %d)", pos.*.x, pos.*.y);
+            const label = c.gtk_label_new(gstring);
+            c.gtk_fixed_put(@ptrCast(container), label, pos.*.x, pos.*.y);
+        }
     }
     for (0..@intCast(c.atspi_accessible_get_child_count(obj, null))) |i| {
         print_child(
