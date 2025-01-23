@@ -38,7 +38,7 @@ pub fn main() !void {
     );
     const menu = c.gtk_menu_new();
     const quit = c.gtk_menu_item_new_with_label("Quit");
-    g_signal_connect(quit, "activate", @ptrCast(&on_quit), null);
+    g_signal_connect(quit, "activate", @ptrCast(&c.gtk_main_quit), null);
     c.gtk_menu_shell_append(@ptrCast(menu), @ptrCast(quit));
     c.gtk_widget_show_all(menu);
     c.app_indicator_set_menu(app, @ptrCast(menu));
@@ -110,10 +110,6 @@ fn g_signal_connect(
         null,
         0,
     );
-}
-
-fn on_quit(_: ?*c.GtkMenuItem, _: ?*c.gpointer) void {
-    c.gtk_main_quit();
 }
 
 fn print_tree(window: *c.GtkWidget) void {
