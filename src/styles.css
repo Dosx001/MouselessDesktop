@@ -1,0 +1,12 @@
+label {
+  background-color: yellow;
+  border-radius: 10px;
+  border: 1px solid black;
+  color: black;
+  font-family: monospace;
+  padding: 0 3px;
+}
+
+window {
+  background-color: transparent;
+}

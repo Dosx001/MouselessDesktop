@@ -18,13 +18,10 @@ pub fn main() !void {
     const screen = c.gtk_window_get_screen(w);
     const visual = c.gdk_screen_get_rgba_visual(screen);
     if (visual != null) c.gtk_widget_set_visual(window, visual);
+    const file = c.g_file_new_for_path("src/styles.css");
+    defer c.g_object_unref(file);
     const css_provider = c.gtk_css_provider_new();
-    _ = c.gtk_css_provider_load_from_data(
-        css_provider,
-        "window { background-color: transparent; }",
-        -1,
-        null,
-    );
+    _ = c.gtk_css_provider_load_from_file(css_provider, file, null);
     c.gtk_style_context_add_provider_for_screen(
         screen,
         @ptrCast(css_provider),
