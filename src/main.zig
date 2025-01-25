@@ -1,9 +1,11 @@
 const std = @import("std");
+const go = @import("gobject.zig");
+const tray = @import("systemtray.zig");
 const c = @cImport({
     @cInclude("X11/Xlib.h");
     @cInclude("X11/keysym.h");
     @cInclude("at-spi-2.0/atspi/atspi.h");
-    @cInclude("libappindicator3-0.1/libappindicator/app-indicator.h");
+    @cInclude("gtk-3.0/gtk/gtk.h");
 });
 
 var RUNNING: bool = true;
@@ -13,7 +15,7 @@ pub fn main() !void {
     var argv: [*c][*c]u8 = undefined;
     c.gtk_init(&argc, &argv);
     const window = c.gtk_window_new(c.GTK_WINDOW_TOPLEVEL);
-    g_signal_connect(window, "delete-event", @ptrCast(&c.gtk_widget_hide_on_delete), null);
+    go.g_signal_connect(window, "delete-event", @ptrCast(&c.gtk_widget_hide_on_delete), null);
     const w: *c.GtkWindow = @ptrCast(window);
     const screen = c.gtk_window_get_screen(w);
     const visual = c.gdk_screen_get_rgba_visual(screen);
@@ -28,18 +30,8 @@ pub fn main() !void {
         c.GTK_STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
     c.gtk_window_fullscreen(w);
-    const app = c.app_indicator_new(
-        "Mouseless Desktop",
-        "application-exit",
-        c.APP_INDICATOR_CATEGORY_APPLICATION_STATUS,
-    );
-    const menu = c.gtk_menu_new();
-    const quit = c.gtk_menu_item_new_with_label("Quit");
-    g_signal_connect(quit, "activate", @ptrCast(&c.gtk_main_quit), null);
-    c.gtk_menu_shell_append(@ptrCast(menu), @ptrCast(quit));
-    c.gtk_widget_show_all(menu);
-    c.app_indicator_set_menu(app, @ptrCast(menu));
-    c.app_indicator_set_status(app, c.APP_INDICATOR_STATUS_ACTIVE);
+    const stray = tray.SystemTray.init();
+    defer stray.deinit();
     const thread = std.Thread.spawn(.{}, hotkey, .{ &RUNNING, window }) catch unreachable;
     c.gtk_main();
     RUNNING = false;
@@ -91,22 +83,6 @@ fn hotkey(run: *bool, window: *c.GtkWidget) !void {
             }
         }
     }
-}
-
-fn g_signal_connect(
-    instance: c.gpointer,
-    detailed_signal: [*c]const c.gchar,
-    c_handler: c.GCallback,
-    data: c.gpointer,
-) void {
-    _ = c.g_signal_connect_data(
-        instance,
-        detailed_signal,
-        c_handler,
-        data,
-        null,
-        0,
-    );
 }
 
 fn print_tree(window: *c.GtkWidget) void {
