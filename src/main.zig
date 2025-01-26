@@ -1,8 +1,6 @@
 const std = @import("std");
-const go = @import("gobject.zig");
-const hotkey = @import("hotkey.zig");
+const mouseless = @import("mouseless.zig");
 const tray = @import("systemtray.zig");
-const window = @import("window.zig");
 const c = @cImport({
     @cInclude("gtk-3.0/gtk/gtk.h");
 });
@@ -13,12 +11,11 @@ pub fn main() !void {
     c.gtk_init(&argc, &argv);
     tray.init();
     defer tray.deinit();
-    const win = window.Window.init();
-    defer win.deinit();
+    mouseless.init() catch unreachable;
+    defer mouseless.deinit();
     var running = true;
-    const thread = std.Thread.spawn(.{}, hotkey.Hotkey.init, .{
+    const thread = std.Thread.spawn(.{}, mouseless.run, .{
         &running,
-        win.window,
     }) catch unreachable;
     c.gtk_main();
     running = false;
