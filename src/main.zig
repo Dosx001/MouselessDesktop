@@ -11,8 +11,8 @@ pub fn main() !void {
     var argc: c_int = 0;
     var argv: [*c][*c]u8 = undefined;
     c.gtk_init(&argc, &argv);
-    const stray = tray.SystemTray.init();
-    defer stray.deinit();
+    tray.init();
+    defer tray.deinit();
     const win = window.Window.init();
     defer win.deinit();
     var running = true;
