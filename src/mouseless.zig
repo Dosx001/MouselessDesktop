@@ -10,6 +10,9 @@ const c = @cImport({
 var window: *c.GtkWidget = undefined;
 var display: ?*c.Display = undefined;
 
+var count: usize = 0;
+const chars = ";alskdjfiwoe";
+
 pub fn init() !void {
     display = c.XOpenDisplay(null);
     if (display == null) {
@@ -119,9 +122,10 @@ fn label_object(container: [*c]c.GtkContainer, obj: ?*c.AtspiAccessible) void {
                 null,
             );
             defer c.g_free(pos);
-            const gstring: [*c]u8 = @ptrCast(c.g_malloc(8));
-            _ = c.sprintf(gstring, "(%d, %d)", pos.*.x, pos.*.y);
-            const label = c.gtk_label_new(gstring);
+            var buffer: [4]u8 = undefined;
+            create_key(&buffer);
+            count += 1;
+            const label = c.gtk_label_new(&buffer);
             c.gtk_fixed_put(@ptrCast(container), label, pos.*.x, pos.*.y);
         }
     }
@@ -147,4 +151,20 @@ fn check_role(role: c_uint) bool {
         => true,
         else => false,
     };
+}
+
+fn create_key(buf: [*c]u8) void {
+    if (count == 0) {
+        buf[0] = chars[0];
+        buf[1] = 0;
+        return;
+    }
+    const base = chars.len;
+    var i: usize = count;
+    var j: u8 = 0;
+    while (0 < i) : (i = @divFloor(i, base)) {
+        buf[j] = chars[i % base];
+        j += 1;
+    }
+    buf[j] = 0;
 }
