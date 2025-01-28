@@ -22,7 +22,7 @@ pub fn init() !void {
     }
     window = c.gtk_window_new(c.GTK_WINDOW_TOPLEVEL);
     c.gtk_window_fullscreen(@ptrCast(window));
-    go.g_signal_connect(window, "delete-event", @ptrCast(&c.gtk_widget_hide_on_delete), null);
+    go.g_signal_connect(window, "delete-event", @ptrCast(&hide), null);
     fixed = c.gtk_fixed_new();
     c.gtk_container_add(@ptrCast(window), fixed);
     const accel_group = c.gtk_accel_group_new();
@@ -58,6 +58,12 @@ pub fn init() !void {
 pub fn deinit() void {
     c.gtk_widget_destroy(window);
     _ = c.XCloseDisplay(display);
+}
+
+fn hide() void {
+    count = 0;
+    c.gtk_container_foreach(@ptrCast(fixed), @ptrCast(&c.gtk_widget_destroy), null);
+    _ = c.gtk_widget_hide_on_delete(window);
 }
 
 fn clear() void {
