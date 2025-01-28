@@ -124,7 +124,7 @@ fn find_active_window() void {
                 const states = c.atspi_accessible_get_state_set(win);
                 defer c.g_object_unref(states);
                 if (c.atspi_state_set_contains(states, c.ATSPI_STATE_ACTIVE) == 1) {
-                    label_object(@ptrCast(fixed), win);
+                    label_object(win);
                     return;
                 }
             }
@@ -132,7 +132,7 @@ fn find_active_window() void {
     }
 }
 
-fn label_object(container: [*c]c.GtkContainer, obj: ?*c.AtspiAccessible) void {
+fn label_object(obj: ?*c.AtspiAccessible) void {
     if (obj == null) return;
     const role = c.atspi_accessible_get_role(obj, null);
     if (check_role(role)) {
@@ -155,12 +155,11 @@ fn label_object(container: [*c]c.GtkContainer, obj: ?*c.AtspiAccessible) void {
             create_key(&buffer);
             count += 1;
             const label = c.gtk_label_new(&buffer);
-            c.gtk_fixed_put(@ptrCast(container), label, pos.*.x, pos.*.y);
+            c.gtk_fixed_put(@ptrCast(fixed), label, pos.*.x, pos.*.y);
         }
     }
     for (0..@intCast(c.atspi_accessible_get_child_count(obj, null))) |i| {
         label_object(
-            container,
             c.atspi_accessible_get_child_at_index(obj, @intCast(i), null),
         );
     }
