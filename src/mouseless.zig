@@ -13,6 +13,8 @@ var fixed: *c.GtkWidget = undefined;
 
 var count: usize = 0;
 const chars = ";alskdjfiwoe";
+const Point = struct { x: c_int, y: c_int };
+var map = std.StringHashMap(Point).init(std.heap.page_allocator);
 
 pub fn init() !void {
     display = c.XOpenDisplay(null);
@@ -53,23 +55,34 @@ pub fn init() !void {
         @ptrCast(css_provider),
         c.GTK_STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
+    map.ensureTotalCapacity(128) catch unreachable;
+}
+
+fn clear_keys() void {
+    var iter = map.iterator();
+    while (iter.next()) |e|
+        std.heap.page_allocator.free(e.key_ptr.*);
+    map.clearRetainingCapacity();
 }
 
 pub fn deinit() void {
     c.gtk_widget_destroy(window);
     _ = c.XCloseDisplay(display);
+    clear_keys();
 }
 
 fn hide() void {
     count = 0;
     c.gtk_container_foreach(@ptrCast(fixed), @ptrCast(&c.gtk_widget_destroy), null);
     _ = c.gtk_widget_hide_on_delete(window);
+    clear_keys();
 }
 
 fn clear() void {
     c.gtk_widget_hide(window);
     count = 0;
     c.gtk_container_foreach(@ptrCast(fixed), @ptrCast(&c.gtk_widget_destroy), null);
+    clear_keys();
 }
 
 pub fn run(running: *bool) void {
@@ -151,10 +164,11 @@ fn label_object(obj: ?*c.AtspiAccessible) void {
                 null,
             );
             defer c.g_free(pos);
-            var buffer: [4]u8 = undefined;
+            var buffer = std.heap.page_allocator.alloc(u8, 4) catch unreachable;
             create_key(&buffer);
+            map.put(buffer, Point{ .x = pos.*.x, .y = pos.*.y }) catch unreachable;
             count += 1;
-            const label = c.gtk_label_new(&buffer);
+            const label = c.gtk_label_new(@ptrCast(buffer));
             c.gtk_fixed_put(@ptrCast(fixed), label, pos.*.x, pos.*.y);
         }
     }
@@ -181,18 +195,18 @@ fn check_role(role: c_uint) bool {
     };
 }
 
-fn create_key(buf: [*c]u8) void {
+fn create_key(buf: *[]u8) void {
     if (count == 0) {
-        buf[0] = chars[0];
-        buf[1] = 0;
+        buf.ptr[0] = chars[0];
+        buf.ptr[1] = 0;
         return;
     }
     const base = chars.len;
     var i: usize = count;
     var j: u8 = 0;
     while (0 < i) : (i = @divFloor(i, base)) {
-        buf[j] = chars[i % base];
+        buf.ptr[j] = chars[i % base];
         j += 1;
     }
-    buf[j] = 0;
+    buf.ptr[j] = 0;
 }
