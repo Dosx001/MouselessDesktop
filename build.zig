@@ -38,6 +38,7 @@ pub fn build(b: *std.Build) void {
 
     exe.linkLibC();
     exe.linkSystemLibrary("X11");
+    exe.linkSystemLibrary("Xtst");
     exe.linkSystemLibrary("appindicator3-0.1");
     exe.linkSystemLibrary("atspi-2");
 

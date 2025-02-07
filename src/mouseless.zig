@@ -2,6 +2,7 @@ const std = @import("std");
 const go = @import("gobject.zig");
 const c = @cImport({
     @cInclude("X11/Xlib.h");
+    @cInclude("X11/extensions/XTest.h");
     @cInclude("X11/keysym.h");
     @cInclude("at-spi-2.0/atspi/atspi.h");
     @cInclude("gtk-3.0/gtk/gtk.h");
@@ -10,6 +11,7 @@ const c = @cImport({
 var window: *c.GtkWidget = undefined;
 var display: ?*c.Display = undefined;
 var fixed: *c.GtkWidget = undefined;
+var entry: *c.GtkWidget = undefined;
 
 var count: usize = 0;
 const chars = ";alskdjfiwoe";
@@ -41,6 +43,19 @@ pub fn init() !void {
         0,
         0,
         clear_closure,
+    );
+    const click_closure = c.g_cclosure_new(
+        @ptrCast(&click),
+        null,
+        null,
+    );
+    defer c.g_closure_unref(click_closure);
+    c.gtk_accel_group_connect(
+        accel_group,
+        c.GDK_KEY_Return,
+        0,
+        0,
+        click_closure,
     );
     c.gtk_window_add_accel_group(@ptrCast(window), accel_group);
     const screen = c.gtk_window_get_screen(@ptrCast(window));
@@ -85,6 +100,19 @@ fn clear() void {
     clear_keys();
 }
 
+fn click() void {
+    const text = c.gtk_entry_get_text(@ptrCast(entry));
+    const key: []const u8 = std.mem.span(text);
+    const pt = map.get(key) orelse return c.gtk_entry_set_text(@ptrCast(entry), "");
+    clear();
+    const root = c.DefaultRootWindow(display);
+    _ = c.XWarpPointer(display, c.None, root, 0, 0, 0, 0, pt.x, pt.y);
+    while (c.g_main_context_iteration(c.g_main_context_default(), c.FALSE) == 1) {}
+    _ = c.XTestFakeButtonEvent(display, 1, 1, c.CurrentTime);
+    _ = c.XTestFakeButtonEvent(display, 1, 0, c.CurrentTime);
+    _ = c.XFlush(display);
+}
+
 pub fn run(running: *bool) void {
     const keycode = c.XKeysymToKeycode(display, c.XK_semicolon);
     if (keycode == 0) {
@@ -126,6 +154,7 @@ pub fn run(running: *bool) void {
 }
 
 fn find_active_window() void {
+    entry = c.gtk_entry_new();
     for (0..@intCast(c.atspi_get_desktop_count())) |i| {
         const desktop: ?*c.AtspiAccessible = c.atspi_get_desktop(@intCast(i));
         for (0..@intCast(c.atspi_accessible_get_child_count(desktop, null))) |j| {
@@ -137,6 +166,13 @@ fn find_active_window() void {
                 const states = c.atspi_accessible_get_state_set(win);
                 defer c.g_object_unref(states);
                 if (c.atspi_state_set_contains(states, c.ATSPI_STATE_ACTIVE) == 1) {
+                    const pos = c.atspi_component_get_position(
+                        c.atspi_accessible_get_component_iface(win),
+                        c.ATSPI_COORD_TYPE_SCREEN,
+                        null,
+                    );
+                    defer c.g_free(pos);
+                    c.gtk_fixed_put(@ptrCast(fixed), @ptrCast(entry), @intCast(pos.*.x), @intCast(pos.*.y));
                     label_object(win);
                     return;
                 }
@@ -158,17 +194,29 @@ fn label_object(obj: ?*c.AtspiAccessible) void {
             states,
             c.ATSPI_STATE_SHOWING,
         ) == 1) {
+            const size = c.atspi_component_get_size(
+                c.atspi_accessible_get_component_iface(obj),
+                null,
+            );
+            defer c.g_free(size);
             const pos = c.atspi_component_get_position(
                 c.atspi_accessible_get_component_iface(obj),
                 c.ATSPI_COORD_TYPE_SCREEN,
                 null,
             );
             defer c.g_free(pos);
-            var buffer = std.heap.page_allocator.alloc(u8, 4) catch unreachable;
-            create_key(&buffer);
-            map.put(buffer, Point{ .x = pos.*.x, .y = pos.*.y }) catch unreachable;
+            const buffer = std.heap.page_allocator.alloc(u8, 4) catch unreachable;
+            defer std.heap.page_allocator.free(buffer);
+            const key = std.heap.page_allocator.dupe(
+                u8,
+                buffer[0..create_key(buffer)],
+            ) catch unreachable;
+            map.put(key, Point{
+                .x = @divFloor(2 * pos.*.x + size.*.x, 2),
+                .y = @divFloor(2 * pos.*.y + size.*.y, 2),
+            }) catch unreachable;
             count += 1;
-            const label = c.gtk_label_new(@ptrCast(buffer));
+            const label = c.gtk_label_new(@ptrCast(key));
             c.gtk_fixed_put(@ptrCast(fixed), label, pos.*.x, pos.*.y);
         }
     }
@@ -195,18 +243,17 @@ fn check_role(role: c_uint) bool {
     };
 }
 
-fn create_key(buf: *[]u8) void {
+fn create_key(buf: []u8) u8 {
     if (count == 0) {
         buf.ptr[0] = chars[0];
-        buf.ptr[1] = 0;
-        return;
+        return 1;
     }
     const base = chars.len;
     var i: usize = count;
     var j: u8 = 0;
     while (0 < i) : (i = @divFloor(i, base)) {
-        buf.ptr[j] = chars[i % base];
+        buf[j] = chars[i % base];
         j += 1;
     }
-    buf.ptr[j] = 0;
+    return j;
 }
