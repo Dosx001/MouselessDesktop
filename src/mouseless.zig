@@ -14,7 +14,7 @@ var fixed: *c.GtkWidget = undefined;
 var entry: *c.GtkWidget = undefined;
 
 var count: usize = 0;
-const chars = ";alskdjfiwoe";
+const chars = ";ALSKDJFIWOE";
 const Point = struct { x: c_int, y: c_int };
 var map = std.StringHashMap(Point).init(std.heap.page_allocator);
 
@@ -101,8 +101,11 @@ fn clear() void {
 }
 
 fn click() void {
-    const text = c.gtk_entry_get_text(@ptrCast(entry));
-    const key: []const u8 = std.mem.span(text);
+    const key = std.ascii.allocUpperString(
+        std.heap.page_allocator,
+        std.mem.span(c.gtk_entry_get_text(@ptrCast(entry))),
+    ) catch unreachable;
+    defer std.heap.page_allocator.free(key);
     const pt = map.get(key) orelse return c.gtk_entry_set_text(@ptrCast(entry), "");
     clear();
     const root = c.DefaultRootWindow(display);
