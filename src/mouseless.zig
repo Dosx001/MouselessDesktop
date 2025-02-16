@@ -1,6 +1,7 @@
 const std = @import("std");
 const go = @import("gobject.zig");
 const c = @cImport({
+    @cInclude("X11/Xatom.h");
     @cInclude("X11/Xlib.h");
     @cInclude("X11/extensions/XTest.h");
     @cInclude("X11/keysym.h");
@@ -158,6 +159,7 @@ pub fn run(running: *bool) void {
 
 fn find_active_window() void {
     entry = c.gtk_entry_new();
+    const pid = active_pid();
     for (0..@intCast(c.atspi_get_desktop_count())) |i| {
         const desktop: ?*c.AtspiAccessible = c.atspi_get_desktop(@intCast(i));
         for (0..@intCast(c.atspi_accessible_get_child_count(desktop, null))) |j| {
@@ -168,7 +170,9 @@ fn find_active_window() void {
                 defer c.g_object_unref(win);
                 const states = c.atspi_accessible_get_state_set(win);
                 defer c.g_object_unref(states);
-                if (c.atspi_state_set_contains(states, c.ATSPI_STATE_ACTIVE) == 1) {
+                if (c.atspi_state_set_contains(states, c.ATSPI_STATE_ACTIVE) == 1 and
+                    pid == c.atspi_accessible_get_process_id(win, null))
+                {
                     const pos = c.atspi_component_get_position(
                         c.atspi_accessible_get_component_iface(win),
                         c.ATSPI_COORD_TYPE_SCREEN,
@@ -259,4 +263,55 @@ fn create_key(buf: []u8) u8 {
         j += 1;
     }
     return j;
+}
+
+fn active_pid() c_int {
+    var atom = c.XInternAtom(display, "_NET_ACTIVE_WINDOW", 1);
+    if (atom == c.None) return 0;
+    var actual_type: c.Atom = undefined;
+    var actual_format: c_int = undefined;
+    var nitems: c_ulong = undefined;
+    var bytes_after: c_ulong = undefined;
+    var prop: [*c]u8 = undefined;
+    var win: c.Window = undefined;
+    if (c.XGetWindowProperty(
+        display,
+        c.DefaultRootWindow(display),
+        atom,
+        0,
+        1,
+        0,
+        c.XA_WINDOW,
+        &actual_type,
+        &actual_format,
+        &nitems,
+        &bytes_after,
+        &prop,
+    ) == c.Success) {
+        defer _ = c.XFree(prop);
+        if (0 < nitems)
+            win = @as(*c.Window, @ptrCast(@alignCast(prop))).*;
+    }
+    if (win == 0) return 0;
+    atom = c.XInternAtom(display, "_NET_WM_PID", 1);
+    if (atom == c.None) return 0;
+    if (c.XGetWindowProperty(
+        display,
+        win,
+        atom,
+        0,
+        1,
+        0,
+        c.XA_CARDINAL,
+        &actual_type,
+        &actual_format,
+        &nitems,
+        &bytes_after,
+        &prop,
+    ) == c.Success) {
+        defer _ = c.XFree(prop);
+        if (0 < nitems)
+            return @as(*c.pid_t, @ptrCast(@alignCast(prop))).*;
+    }
+    return 0;
 }
