@@ -150,14 +150,14 @@ pub fn run(running: *bool) void {
         while (0 < c.XPending(display)) {
             _ = c.XNextEvent(display, &event);
             if (event.type == c.KeyPress) {
-                find_active_window();
-                c.gtk_widget_show_all(window);
+                if (find_active_window())
+                    c.gtk_widget_show_all(window);
             }
         }
     }
 }
 
-fn find_active_window() void {
+fn find_active_window() bool {
     entry = c.gtk_entry_new();
     const pid = active_pid();
     for (0..@intCast(c.atspi_get_desktop_count())) |i| {
@@ -181,11 +181,12 @@ fn find_active_window() void {
                     defer c.g_free(pos);
                     c.gtk_fixed_put(@ptrCast(fixed), @ptrCast(entry), @intCast(pos.*.x), @intCast(pos.*.y));
                     label_object(win);
-                    return;
+                    return true;
                 }
             }
         }
     }
+    return false;
 }
 
 fn label_object(obj: ?*c.AtspiAccessible) void {
