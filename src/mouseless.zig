@@ -1,4 +1,5 @@
 const std = @import("std");
+const icon = @import("icon.zig");
 const go = @import("gobject.zig");
 const c = @cImport({
     @cInclude("X11/Xatom.h");
@@ -26,6 +27,9 @@ pub fn init() !void {
         return error.UnableToOpenDisplay;
     }
     window = c.gtk_window_new(c.GTK_WINDOW_TOPLEVEL);
+    const path = icon.get_path(icon.Size.x128, true, std.heap.page_allocator);
+    defer std.heap.page_allocator.free(path);
+    _ = c.gtk_window_set_default_icon_from_file(path.ptr, null);
     c.gtk_window_fullscreen(@ptrCast(window));
     go.g_signal_connect(window, "delete-event", @ptrCast(&hide), null);
     fixed = c.gtk_fixed_new();

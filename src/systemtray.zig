@@ -1,3 +1,5 @@
+const std = @import("std");
+const icon = @import("icon.zig");
 const go = @import("gobject.zig");
 const c = @cImport({
     @cInclude("libappindicator3-0.1/libappindicator/app-indicator.h");
@@ -6,10 +8,13 @@ const c = @cImport({
 var app: *c.AppIndicator = undefined;
 
 pub fn init() void {
-    app = c.app_indicator_new(
+    const path = icon.get_path(icon.Size.x32, false, std.heap.page_allocator);
+    defer std.heap.page_allocator.free(path);
+    app = c.app_indicator_new_with_path(
         "Mouseless Desktop",
-        "application-exit",
+        "32x32",
         c.APP_INDICATOR_CATEGORY_APPLICATION_STATUS,
+        path.ptr,
     );
     const menu = c.gtk_menu_new();
     const quit = c.gtk_menu_item_new_with_label("Quit");
