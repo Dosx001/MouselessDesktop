@@ -10,6 +10,12 @@ const c = @cImport({
     @cInclude("gtk-3.0/gtk/gtk.h");
 });
 
+const Click = enum {
+    double,
+    middle,
+    single,
+};
+
 var window: *c.GtkWidget = undefined;
 var display: ?*c.Display = undefined;
 var fixed: *c.GtkWidget = undefined;
@@ -33,36 +39,8 @@ pub fn init() !void {
     c.gtk_window_fullscreen(@ptrCast(window));
     go.g_signal_connect(window, "delete-event", @ptrCast(&hide), null);
     fixed = c.gtk_fixed_new();
+    bind_keys();
     c.gtk_container_add(@ptrCast(window), fixed);
-    const accel_group = c.gtk_accel_group_new();
-    defer c.g_object_unref(@ptrCast(accel_group));
-    const clear_closure = c.g_cclosure_new(
-        @ptrCast(&clear),
-        null,
-        null,
-    );
-    defer c.g_closure_unref(clear_closure);
-    c.gtk_accel_group_connect(
-        accel_group,
-        c.GDK_KEY_Escape,
-        0,
-        0,
-        clear_closure,
-    );
-    const click_closure = c.g_cclosure_new(
-        @ptrCast(&click),
-        null,
-        null,
-    );
-    defer c.g_closure_unref(click_closure);
-    c.gtk_accel_group_connect(
-        accel_group,
-        c.GDK_KEY_Return,
-        0,
-        0,
-        click_closure,
-    );
-    c.gtk_window_add_accel_group(@ptrCast(window), accel_group);
     const screen = c.gtk_window_get_screen(@ptrCast(window));
     const visual = c.gdk_screen_get_rgba_visual(screen);
     if (visual != null) c.gtk_widget_set_visual(window, visual);
@@ -105,7 +83,72 @@ fn clear() void {
     clear_keys();
 }
 
-fn click() void {
+fn bind_keys() void {
+    const accel_group = c.gtk_accel_group_new();
+    defer c.g_object_unref(@ptrCast(accel_group));
+    const clear_closure = c.g_cclosure_new(
+        @ptrCast(&clear),
+        null,
+        null,
+    );
+    defer c.g_closure_unref(clear_closure);
+    c.gtk_accel_group_connect(
+        accel_group,
+        c.GDK_KEY_Escape,
+        0,
+        0,
+        clear_closure,
+    );
+    const click_double_closure = c.g_cclosure_new(
+        @ptrCast(&click),
+        c.GINT_TO_POINTER(@intFromEnum(Click.double)),
+        null,
+    );
+    defer c.g_closure_unref(click_double_closure);
+    c.gtk_accel_group_connect(
+        accel_group,
+        c.GDK_KEY_Return,
+        c.GDK_CONTROL_MASK,
+        0,
+        click_double_closure,
+    );
+    const click_middle_closure = c.g_cclosure_new(
+        @ptrCast(&click),
+        c.GINT_TO_POINTER(@intFromEnum(Click.middle)),
+        null,
+    );
+    defer c.g_closure_unref(click_middle_closure);
+    c.gtk_accel_group_connect(
+        accel_group,
+        c.GDK_KEY_Return,
+        c.GDK_MOD1_MASK,
+        0,
+        click_middle_closure,
+    );
+    const click_single_closure = c.g_cclosure_new(
+        @ptrCast(&click),
+        c.GINT_TO_POINTER(@intFromEnum(Click.single)),
+        null,
+    );
+    defer c.g_closure_unref(click_single_closure);
+    c.gtk_accel_group_connect(
+        accel_group,
+        c.GDK_KEY_Return,
+        0,
+        0,
+        click_single_closure,
+    );
+    c.gtk_window_add_accel_group(@ptrCast(window), accel_group);
+}
+
+fn click(
+    _: *c.GClosure,
+    _: *c.GValue,
+    _: c.guint,
+    _: [*c]const c.GValue,
+    data: c.gpointer,
+    _: c.gpointer,
+) void {
     const key = std.ascii.allocUpperString(
         std.heap.page_allocator,
         std.mem.span(c.gtk_entry_get_text(@ptrCast(entry))),
@@ -116,8 +159,22 @@ fn click() void {
     const root = c.DefaultRootWindow(display);
     _ = c.XWarpPointer(display, c.None, root, 0, 0, 0, 0, pt.x, pt.y);
     while (c.g_main_context_iteration(c.g_main_context_default(), c.FALSE) == 1) {}
-    _ = c.XTestFakeButtonEvent(display, 1, 1, c.CurrentTime);
-    _ = c.XTestFakeButtonEvent(display, 1, 0, c.CurrentTime);
+    switch (@as(Click, @enumFromInt(c.GPOINTER_TO_INT(data)))) {
+        Click.double => {
+            _ = c.XTestFakeButtonEvent(display, 1, 1, c.CurrentTime);
+            _ = c.XTestFakeButtonEvent(display, 1, 0, c.CurrentTime);
+            _ = c.XTestFakeButtonEvent(display, 1, 1, c.CurrentTime);
+            _ = c.XTestFakeButtonEvent(display, 1, 0, c.CurrentTime);
+        },
+        Click.middle => {
+            _ = c.XTestFakeButtonEvent(display, 2, 1, c.CurrentTime);
+            _ = c.XTestFakeButtonEvent(display, 2, 0, c.CurrentTime);
+        },
+        Click.single => {
+            _ = c.XTestFakeButtonEvent(display, 1, 1, c.CurrentTime);
+            _ = c.XTestFakeButtonEvent(display, 1, 0, c.CurrentTime);
+        },
+    }
     _ = c.XFlush(display);
 }
 
