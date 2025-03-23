@@ -6,8 +6,8 @@ const c = @cImport({
 });
 
 pub fn main() !void {
-    var argc: c_int = 0;
-    var argv: [*c][*c]u8 = undefined;
+    var argc: c_int = @intCast(std.os.argv.len);
+    var argv: [*c][*c]u8 = @ptrCast(std.os.argv.ptr);
     c.gtk_init(&argc, &argv);
     tray.init();
     defer tray.deinit();
