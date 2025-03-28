@@ -7,8 +7,8 @@ const c = @cImport({
 
 var app: *c.AppIndicator = undefined;
 
-pub fn init() void {
-    const path = icon.get_path(icon.Size.x32, false, std.heap.page_allocator);
+pub fn init() !void {
+    const path = try icon.get_path(icon.Size.x32, false, std.heap.page_allocator);
     defer std.heap.page_allocator.free(path);
     app = c.app_indicator_new_with_path(
         "Mouseless Desktop",

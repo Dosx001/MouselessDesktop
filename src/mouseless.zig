@@ -29,11 +29,11 @@ var map = std.StringHashMap(Point).init(std.heap.page_allocator);
 pub fn init() !void {
     display = c.XOpenDisplay(null);
     if (display == null) {
-        std.debug.print("Unable to open display\n", .{});
-        return error.UnableToOpenDisplay;
+        std.log.err("XOpenDisplay failed", .{});
+        return error.XOpenDisplay;
     }
     window = c.gtk_window_new(c.GTK_WINDOW_TOPLEVEL);
-    const path = icon.get_path(icon.Size.x128, true, std.heap.page_allocator);
+    const path = try icon.get_path(icon.Size.x128, true, std.heap.page_allocator);
     defer std.heap.page_allocator.free(path);
     _ = c.gtk_window_set_default_icon_from_file(path.ptr, null);
     c.gtk_window_fullscreen(@ptrCast(window));
@@ -53,7 +53,10 @@ pub fn init() !void {
         @ptrCast(css_provider),
         c.GTK_STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
-    map.ensureTotalCapacity(128) catch unreachable;
+    map.ensureTotalCapacity(128) catch |e| {
+        std.log.err("map allocation failed: {}", .{e});
+        return e;
+    };
 }
 
 fn clear_keys() void {
@@ -152,7 +155,10 @@ fn click(
     const key = std.ascii.allocUpperString(
         std.heap.page_allocator,
         std.mem.span(c.gtk_entry_get_text(@ptrCast(entry))),
-    ) catch unreachable;
+    ) catch {
+        std.log.err("key allocation failed", .{});
+        return;
+    };
     defer std.heap.page_allocator.free(key);
     const pt = map.get(key) orelse return c.gtk_entry_set_text(@ptrCast(entry), "");
     clear();
@@ -178,11 +184,11 @@ fn click(
     _ = c.XFlush(display);
 }
 
-pub fn run(running: *bool) void {
+pub fn run(running: *bool) !void {
     const keycode = c.XKeysymToKeycode(display, c.XK_semicolon);
     if (keycode == 0) {
-        std.debug.print("Unable to escape\n", .{});
-        return;
+        std.log.err("XKeysymToKeycode failed", .{});
+        return error.XKeysymToKeycode;
     }
     const root = c.DefaultRootWindow(display);
     const modifiers = [4]c.uint{
@@ -274,16 +280,25 @@ fn label_object(obj: ?*c.AtspiAccessible) void {
                 null,
             );
             defer c.g_free(pos);
-            const buffer = std.heap.page_allocator.alloc(u8, 4) catch unreachable;
+            const buffer = std.heap.page_allocator.alloc(u8, 4) catch |e| {
+                std.log.err("key buffer allocation failed: {}", .{e});
+                return;
+            };
             defer std.heap.page_allocator.free(buffer);
             const key = std.heap.page_allocator.dupe(
                 u8,
                 buffer[0..create_key(buffer)],
-            ) catch unreachable;
+            ) catch |e| {
+                std.log.err("key copy failed: {}", .{e});
+                return;
+            };
             map.put(key, Point{
                 .x = @divFloor(2 * pos.*.x + size.*.x, 2),
                 .y = @divFloor(2 * pos.*.y + size.*.y, 2),
-            }) catch unreachable;
+            }) catch |e| {
+                std.log.err("point allocation failed: {}", .{e});
+                return;
+            };
             count += 1;
             const label = c.gtk_label_new(@ptrCast(key));
             c.gtk_fixed_put(@ptrCast(fixed), label, pos.*.x, pos.*.y);
