@@ -5,6 +5,10 @@ const c = @cImport({
     @cInclude("gtk-3.0/gtk/gtk.h");
 });
 
+pub const std_options: std.Options = .{
+    .logFn = @import("log.zig").logger,
+};
+
 pub fn main() !void {
     var argc: c_int = @intCast(std.os.argv.len);
     var argv: [*c][*c]u8 = @ptrCast(std.os.argv.ptr);
