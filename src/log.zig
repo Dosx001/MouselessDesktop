@@ -15,7 +15,7 @@ pub fn logger(
         defer std.debug.unlockStdErr();
         const stderr = std.io.getStdErr().writer();
         nosuspend stderr.print(
-            @tagName(level) ++ scope_name ++ format ++ "\n",
+            @tagName(level) ++ "|" ++ scope_name ++ format ++ "\n",
             args,
         ) catch return;
     }
