@@ -1,13 +1,14 @@
 const std = @import("std");
-const icon = @import("icon.zig");
 const go = @import("gobject.zig");
+const icon = @import("icon.zig");
+const msg = @import("message.zig");
 const c = @cImport({
     @cInclude("X11/Xatom.h");
-    @cInclude("X11/Xlib.h");
     @cInclude("X11/extensions/XTest.h");
-    @cInclude("X11/keysym.h");
     @cInclude("at-spi-2.0/atspi/atspi.h");
+    @cInclude("fcntl.h");
     @cInclude("gtk-3.0/gtk/gtk.h");
+    @cInclude("semaphore.h");
 });
 
 const Click = enum {
@@ -26,12 +27,45 @@ const chars = ";ALSKDJFIWOE";
 const Point = struct { x: c_int, y: c_int };
 var map = std.StringHashMap(Point).init(std.heap.page_allocator);
 
+var shm: c_int = undefined;
+var mmap: []align(std.mem.page_size) u8 = undefined;
+var sem: [*c]c.sem_t = undefined;
+
 pub fn init() !void {
+    shm = std.c.shm_open("mouseless", c.O_CREAT | c.O_EXCL | c.O_RDWR, 0o0666);
+    if (shm < 0) {
+        std.log.err("shm_open failed: {d}", .{shm});
+        return error.ShmOpen;
+    }
+    sem = c.sem_open("mouseless", c.O_CREAT, @as(c.mode_t, 0o0666), @as(c_uint, 0));
+    if (sem == c.SEM_FAILED) {
+        std.log.err("sem_open failed", .{});
+        return error.SemOpen;
+    }
+    if (std.c.ftruncate(shm, msg.size) != 0) {
+        std.log.err("shm ftruncate failed", .{});
+        return error.Ftruncate;
+    }
+    mmap = try std.posix.mmap(
+        null,
+        msg.size,
+        std.posix.PROT.READ,
+        .{ .TYPE = .SHARED },
+        shm,
+        0,
+    );
     display = c.XOpenDisplay(null);
     if (display == null) {
         std.log.err("XOpenDisplay failed", .{});
         return error.XOpenDisplay;
     }
+    map.ensureTotalCapacity(128) catch |e| {
+        std.log.err("map allocation failed: {}", .{e});
+        return e;
+    };
+}
+
+pub fn gtk_init() !void {
     window = c.gtk_window_new(c.GTK_WINDOW_TOPLEVEL);
     const path = try icon.get_path(icon.Size.x128, true, std.heap.page_allocator);
     defer std.heap.page_allocator.free(path);
@@ -53,10 +87,6 @@ pub fn init() !void {
         @ptrCast(css_provider),
         c.GTK_STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
-    map.ensureTotalCapacity(128) catch |e| {
-        std.log.err("map allocation failed: {}", .{e});
-        return e;
-    };
 }
 
 fn clear_keys() void {
@@ -70,6 +100,10 @@ pub fn deinit() void {
     c.gtk_widget_destroy(window);
     _ = c.XCloseDisplay(display);
     clear_keys();
+    std.posix.munmap(mmap);
+    _ = std.c.shm_unlink("mouseless");
+    _ = c.sem_close(sem);
+    _ = c.sem_unlink("mouseless");
 }
 
 fn hide() void {
@@ -185,41 +219,14 @@ fn click(
 }
 
 pub fn run(running: *bool) !void {
-    const keycode = c.XKeysymToKeycode(display, c.XK_semicolon);
-    if (keycode == 0) {
-        std.log.err("XKeysymToKeycode failed", .{});
-        return error.XKeysymToKeycode;
-    }
-    const root = c.DefaultRootWindow(display);
-    const modifiers = [4]c.uint{
-        c.Mod4Mask,
-        c.Mod4Mask | c.Mod2Mask,
-        c.Mod4Mask | c.LockMask,
-        c.Mod4Mask | c.Mod2Mask | c.LockMask,
-    };
-    inline for (modifiers) |modifier|
-        _ = c.XGrabKey(
-            display,
-            keycode,
-            modifier,
-            root,
-            c.True,
-            c.GrabModeAsync,
-            c.GrabModeAsync,
-        );
-    defer inline for (modifiers) |modifier| {
-        _ = c.XUngrabKey(display, keycode, modifier, root);
-    };
-    _ = c.XSelectInput(display, root, c.KeyPressMask);
-    _ = c.atspi_init();
-    var event: c.XEvent = undefined;
     while (running.*) {
-        while (0 < c.XPending(display)) {
-            _ = c.XNextEvent(display, &event);
-            if (event.type == c.KeyPress) {
+        _ = c.sem_wait(sem);
+        switch (@as(msg.Type, @enumFromInt(mmap[0..1][0]))) {
+            msg.Type.clean => clear(),
+            msg.Type.show => {
                 if (find_active_window())
                     c.gtk_widget_show_all(window);
-            }
+            },
         }
     }
 }
@@ -391,4 +398,9 @@ fn active_pid() c_int {
             return @as(*c.pid_t, @ptrCast(@alignCast(prop))).*;
     }
     return 0;
+}
+
+pub fn reset() void {
+    _ = std.c.shm_unlink("mouseless");
+    _ = c.sem_unlink("mouseless");
 }
