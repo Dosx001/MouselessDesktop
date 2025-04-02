@@ -1,5 +1,6 @@
 const std = @import("std");
 const c = @cImport({
+    @cInclude("libnotify/notify.h");
     @cInclude("syslog.h");
 });
 
@@ -26,6 +27,11 @@ pub fn logger(
         args,
     ) catch return;
     buf[msg.len] = 0;
+    if (@intFromEnum(level) < @intFromEnum(std.log.Level.info)) {
+        const note = c.notify_notification_new("MouselessDesktop", msg.ptr, null);
+        _ = c.notify_notification_show(note, null);
+        _ = c.g_object_unref(note);
+    }
     c.syslog(switch (level) {
         .err => c.LOG_ERR,
         .warn => c.LOG_WARNING,

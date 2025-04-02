@@ -41,6 +41,7 @@ pub fn build(b: *std.Build) void {
     exe.linkSystemLibrary("Xtst");
     exe.linkSystemLibrary("appindicator3-0.1");
     exe.linkSystemLibrary("atspi-2");
+    exe.linkSystemLibrary("libnotify");
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
