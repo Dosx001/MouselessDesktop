@@ -236,10 +236,10 @@ fn find_active_window() bool {
     const pid = active_pid();
     for (0..@intCast(c.atspi_get_desktop_count())) |i| {
         const desktop: ?*c.AtspiAccessible = c.atspi_get_desktop(@intCast(i));
-        for (0..@intCast(c.atspi_accessible_get_child_count(desktop, null))) |j| {
+        for (0..child_count(desktop)) |j| {
             const app = c.atspi_accessible_get_child_at_index(desktop, @intCast(j), null);
             defer c.g_object_unref(app);
-            for (0..@intCast(c.atspi_accessible_get_child_count(app, null))) |k| {
+            for (0..child_count(app)) |k| {
                 const win = c.atspi_accessible_get_child_at_index(app, @intCast(k), null);
                 defer c.g_object_unref(win);
                 const states = c.atspi_accessible_get_state_set(win);
@@ -311,11 +311,24 @@ fn label_object(obj: ?*c.AtspiAccessible) void {
             c.gtk_fixed_put(@ptrCast(fixed), label, pos.*.x, pos.*.y);
         }
     }
-    for (0..@intCast(c.atspi_accessible_get_child_count(obj, null))) |i| {
+    for (0..child_count(obj)) |i| {
         label_object(
             c.atspi_accessible_get_child_at_index(obj, @intCast(i), null),
         );
     }
+}
+
+fn child_count(child: ?*c.AtspiAccessible) usize {
+    const index = c.atspi_accessible_get_child_count(child, null);
+    if (index == -1) {
+        const role = c.atspi_accessible_get_role_name(child, null);
+        defer c.g_free(role);
+        const name = c.atspi_accessible_get_name(child, null);
+        defer c.g_free(name);
+        std.log.warn("failed to get child count for ({s}, {s})", .{ role, name });
+        return 0;
+    }
+    return @intCast(index);
 }
 
 fn check_role(role: c_uint) bool {
