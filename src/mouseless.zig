@@ -24,6 +24,7 @@ var entry: *c.GtkWidget = undefined;
 
 var count: usize = 0;
 const chars = ";ALSKDJFIWOE";
+var key_buf: []u8 = undefined;
 const Point = struct { x: c_int, y: c_int };
 var map = std.StringHashMap(Point).init(std.heap.page_allocator);
 
@@ -59,6 +60,10 @@ pub fn init() !void {
         std.log.err("XOpenDisplay failed", .{});
         return error.XOpenDisplay;
     }
+    key_buf = std.heap.page_allocator.alloc(u8, 4) catch |e| {
+        std.log.err("key buffer allocation failed: {}", .{e});
+        return e;
+    };
     map.ensureTotalCapacity(128) catch |e| {
         std.log.err("map allocation failed: {}", .{e});
         return e;
@@ -100,6 +105,7 @@ pub fn deinit() void {
     c.gtk_widget_destroy(window);
     _ = c.XCloseDisplay(display);
     clear_keys();
+    std.heap.page_allocator.free(key_buf);
     std.posix.munmap(mmap);
     _ = std.c.shm_unlink("mouseless");
     _ = c.sem_close(sem);
@@ -287,14 +293,9 @@ fn label_object(obj: ?*c.AtspiAccessible) void {
                 null,
             );
             defer c.g_free(pos);
-            const buffer = std.heap.page_allocator.alloc(u8, 4) catch |e| {
-                std.log.err("key buffer allocation failed: {}", .{e});
-                return;
-            };
-            defer std.heap.page_allocator.free(buffer);
             const key = std.heap.page_allocator.dupe(
                 u8,
-                buffer[0..create_key(buffer)],
+                key_buf[0..create_key()],
             ) catch |e| {
                 std.log.err("key copy failed: {}", .{e});
                 return;
@@ -347,16 +348,16 @@ fn check_role(role: c_uint) bool {
     };
 }
 
-fn create_key(buf: []u8) u8 {
+fn create_key() u8 {
     if (count == 0) {
-        buf.ptr[0] = chars[0];
+        key_buf.ptr[0] = chars[0];
         return 1;
     }
     const base = chars.len;
     var i: usize = count;
     var j: u8 = 0;
     while (0 < i) : (i = @divFloor(i, base)) {
-        buf[j] = chars[i % base];
+        key_buf[j] = chars[i % base];
         j += 1;
     }
     return j;
