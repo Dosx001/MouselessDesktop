@@ -78,6 +78,7 @@ pub fn gtk_init() !void {
     c.gtk_window_fullscreen(@ptrCast(window));
     go.g_signal_connect(window, "delete-event", @ptrCast(&hide), null);
     fixed = c.gtk_fixed_new();
+    entry = c.gtk_entry_new();
     bind_keys();
     c.gtk_container_add(@ptrCast(window), fixed);
     const screen = c.gtk_window_get_screen(@ptrCast(window));
@@ -99,6 +100,7 @@ fn clear_keys() void {
     while (iter.next()) |e|
         std.heap.page_allocator.free(e.key_ptr.*);
     map.clearRetainingCapacity();
+    entry = c.gtk_entry_new();
 }
 
 pub fn deinit() void {
@@ -238,7 +240,6 @@ pub fn run(running: *bool) !void {
 }
 
 fn find_active_window() bool {
-    entry = c.gtk_entry_new();
     const pid = active_pid();
     for (0..@intCast(c.atspi_get_desktop_count())) |i| {
         const desktop: ?*c.AtspiAccessible = c.atspi_get_desktop(@intCast(i));
