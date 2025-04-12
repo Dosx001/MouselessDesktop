@@ -1,11 +1,11 @@
 const std = @import("std");
 const client = @import("client.zig");
 const mouseless = @import("mouseless.zig");
+const sig = @import("signal.zig");
 const tray = @import("systemtray.zig");
 const c = @cImport({
     @cInclude("gtk-3.0/gtk/gtk.h");
     @cInclude("libnotify/notify.h");
-    @cInclude("signal.h");
 });
 
 pub const std_options: std.Options = .{
@@ -13,7 +13,7 @@ pub const std_options: std.Options = .{
 };
 
 pub fn main() !void {
-    _ = c.signal(c.SIGINT, sigint_handler);
+    sig.setup();
     _ = c.notify_init("MouselessDesktop");
     if (1 < std.os.argv.len) {
         _ = switch (std.os.argv[1][0]) {
@@ -41,8 +41,4 @@ pub fn main() !void {
     thread.join();
     c.notify_uninit();
     return;
-}
-
-fn sigint_handler(_: c_int) callconv(.C) void {
-    c.gtk_main_quit();
 }
