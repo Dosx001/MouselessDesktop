@@ -1,5 +1,5 @@
 const std = @import("std");
-const mouseless = @import("mouseless.zig");
+
 const c = @cImport({
     @cInclude("gtk-3.0/gtk/gtk.h");
     @cInclude("signal.h");
@@ -20,7 +20,6 @@ fn gtk_quit(_: c_int) callconv(.C) void {
 }
 
 fn reset(signal: c_int) callconv(.C) void {
-    mouseless.reset();
     switch (signal) {
         c.SIGILL => std.log.err("Illegal instruction", .{}),
         c.SIGABRT => std.log.err("Error program aborted", .{}),
