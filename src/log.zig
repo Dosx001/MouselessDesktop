@@ -1,5 +1,4 @@
 const std = @import("std");
-const icon = @import("icon.zig");
 const c = @cImport({
     @cInclude("libnotify/notify.h");
     @cInclude("syslog.h");

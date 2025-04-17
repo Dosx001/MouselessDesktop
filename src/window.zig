@@ -1,5 +1,4 @@
 const go = @import("gobject.zig");
-const icon = @import("icon.zig");
 const queue = @import("queue.zig");
 const std = @import("std");
 
@@ -39,10 +38,8 @@ pub fn init() !void {
         return e;
     };
     window = c.gtk_window_new(c.GTK_WINDOW_TOPLEVEL);
-    const path = try icon.get_path(icon.Size.x128, true, std.heap.page_allocator);
-    defer std.heap.page_allocator.free(path);
-    _ = c.gtk_window_set_default_icon_from_file(path.ptr, null);
     c.gtk_window_fullscreen(@ptrCast(window));
+    c.gtk_window_set_skip_taskbar_hint(@ptrCast(window), 1);
     go.g_signal_connect(window, "delete-event", @ptrCast(&quit), null);
     fixed = c.gtk_fixed_new();
     entry = c.gtk_entry_new();
