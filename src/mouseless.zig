@@ -69,6 +69,7 @@ fn find_active_window() bool {
             }
         }
     }
+    std.log.warn("No active window found for pid {}", .{pid});
     return false;
 }
 
