@@ -43,6 +43,7 @@ pub fn init() !void {
     go.g_signal_connect(window, "delete-event", &c.gtk_main_quit, null);
     fixed = c.gtk_fixed_new();
     entry = c.gtk_entry_new();
+    go.g_signal_connect(entry, "focus-out-event", &c.gtk_main_quit, null);
     bind_keys();
     c.gtk_container_add(@ptrCast(window), fixed);
     const screen = c.gtk_window_get_screen(@ptrCast(window));
