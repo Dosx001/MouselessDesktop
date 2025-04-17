@@ -43,8 +43,8 @@ fn find_active_window() bool {
                 defer c.g_object_unref(win);
                 const states = c.atspi_accessible_get_state_set(win);
                 defer c.g_object_unref(states);
-                if (c.atspi_state_set_contains(states, c.ATSPI_STATE_ACTIVE) == 1 and
-                    pid == c.atspi_accessible_get_process_id(win, null))
+                if (pid == c.atspi_accessible_get_process_id(win, null) and
+                    c.atspi_state_set_contains(states, c.ATSPI_STATE_ACTIVE) == 1)
                 {
                     const pos = c.atspi_component_get_position(
                         c.atspi_accessible_get_component_iface(win),
