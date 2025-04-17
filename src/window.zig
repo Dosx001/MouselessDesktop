@@ -40,7 +40,7 @@ pub fn init() !void {
     window = c.gtk_window_new(c.GTK_WINDOW_TOPLEVEL);
     c.gtk_window_fullscreen(@ptrCast(window));
     c.gtk_window_set_skip_taskbar_hint(@ptrCast(window), 1);
-    go.g_signal_connect(window, "delete-event", @ptrCast(&quit), null);
+    go.g_signal_connect(window, "delete-event", &c.gtk_main_quit, null);
     fixed = c.gtk_fixed_new();
     entry = c.gtk_entry_new();
     bind_keys();
@@ -72,7 +72,7 @@ pub fn run() void {
         };
         switch (msg.type) {
             .Done => {
-                quit();
+                c.gtk_main_quit();
                 return;
             },
             .Entry => {
@@ -105,15 +105,11 @@ pub fn run() void {
     }
 }
 
-fn quit() void {
-    c.gtk_main_quit();
-}
-
 fn bind_keys() void {
     const accel_group = c.gtk_accel_group_new();
     defer c.g_object_unref(@ptrCast(accel_group));
     const clear_closure = c.g_cclosure_new(
-        @ptrCast(&quit),
+        &c.gtk_main_quit,
         null,
         null,
     );
@@ -185,7 +181,7 @@ fn click(
     defer std.heap.page_allocator.free(key);
     const pt = map.get(key) orelse return c.gtk_entry_set_text(@ptrCast(entry), "");
     c.gtk_widget_hide(window);
-    quit();
+    c.gtk_main_quit();
     const root = c.DefaultRootWindow(display);
     _ = c.XWarpPointer(display, c.None, root, 0, 0, 0, 0, pt.x, pt.y);
     while (c.g_main_context_iteration(c.g_main_context_default(), c.FALSE) == 1) {}
