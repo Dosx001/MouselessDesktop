@@ -88,8 +88,8 @@ pub fn run() void {
                     return;
                 };
                 map.put(key, .{
-                    .x = msg.pt.x,
-                    .y = msg.pt.y,
+                    .x = @divFloor(2 * msg.pos.x + msg.size.x, 2),
+                    .y = @divFloor(2 * msg.pos.y + msg.size.y, 2),
                 }) catch |e| {
                     std.log.err("point allocation failed: {}", .{e});
                     return;

@@ -26,7 +26,7 @@ pub fn deinit() void {
 pub fn run() void {
     queue.push(queue.Message{
         .type = if (find_active_window()) .Show else .Done,
-        .pt = .{ .x = 0, .y = 0 },
+        .size = .{ .x = 0, .y = 0 },
         .pos = .{ .x = 0, .y = 0 },
     });
 }
@@ -54,13 +54,13 @@ fn find_active_window() bool {
                     defer c.g_free(pos);
                     queue.push(queue.Message{
                         .type = .Entry,
-                        .pt = .{
-                            .x = 0,
-                            .y = 0,
-                        },
                         .pos = .{
                             .x = pos.*.x,
                             .y = pos.*.y,
+                        },
+                        .size = .{
+                            .x = 0,
+                            .y = 0,
                         },
                     });
                     parse_child(win);
@@ -99,13 +99,13 @@ fn parse_child(obj: ?*c.AtspiAccessible) void {
             defer c.g_free(pos);
             queue.push(.{
                 .type = .Point,
-                .pt = .{
-                    .x = @divFloor(2 * pos.*.x + size.*.x, 2),
-                    .y = @divFloor(2 * pos.*.y + size.*.y, 2),
-                },
                 .pos = .{
                     .x = pos.*.x,
                     .y = pos.*.y,
+                },
+                .size = .{
+                    .x = size.*.x,
+                    .y = size.*.y,
                 },
             });
         }

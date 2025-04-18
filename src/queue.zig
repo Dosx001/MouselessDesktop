@@ -13,8 +13,8 @@ pub const Point = struct {
 };
 
 pub const Message = struct {
-    pt: Point,
     pos: Point,
+    size: Point,
     type: Type,
 };
 
