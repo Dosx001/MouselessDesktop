@@ -24,7 +24,7 @@ var display: ?*c.Display = undefined;
 
 var count: usize = 0;
 const chars = ";ALSKDJFIWOE";
-var key_buf: []u8 = undefined;
+var key_buf: [4]u8 = [_]u8{ 0, 0, 0, 0 };
 var map = std.StringHashMap(queue.Point).init(allocator);
 
 pub fn init() !void {
@@ -36,10 +36,6 @@ pub fn init() !void {
         std.log.err("XOpenDisplay failed", .{});
         return error.XOpenDisplay;
     }
-    key_buf = allocator.alloc(u8, 4) catch |e| {
-        std.log.err("key_buf allocation failed: {}", .{e});
-        return e;
-    };
     window = c.gtk_window_new(c.GTK_WINDOW_TOPLEVEL);
     c.gtk_window_fullscreen(@ptrCast(window));
     c.gtk_window_set_skip_taskbar_hint(@ptrCast(window), 1);
@@ -65,7 +61,6 @@ pub fn deinit() void {
     map.deinit();
     _ = c.XCloseDisplay(display);
     c.gtk_widget_destroy(window);
-    allocator.free(key_buf);
 }
 
 pub fn run() void {
@@ -210,7 +205,7 @@ fn click(
 
 fn create_key() u8 {
     if (count == 0) {
-        key_buf.ptr[0] = chars[0];
+        key_buf[0] = chars[0];
         return 1;
     }
     const base = chars.len;
