@@ -1,5 +1,7 @@
 const std = @import("std");
 
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+
 pub const Type = enum {
     Done,
     Entry,
@@ -27,7 +29,7 @@ pub fn init() !void {
     queue = std.fifo.LinearFifo(
         Message,
         .Dynamic,
-    ).init(std.heap.page_allocator);
+    ).init(gpa.allocator());
     queue.ensureTotalCapacity(128) catch
         return error.QueueAlloc;
 }

@@ -14,6 +14,9 @@ const Click = enum {
     single,
 };
 
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+const allocator = gpa.allocator();
+
 var window: *c.GtkWidget = undefined;
 var fixed: *c.GtkWidget = undefined;
 var entry: *c.GtkWidget = undefined;
@@ -22,7 +25,7 @@ var display: ?*c.Display = undefined;
 var count: usize = 0;
 const chars = ";ALSKDJFIWOE";
 var key_buf: []u8 = undefined;
-var map = std.StringHashMap(queue.Point).init(std.heap.page_allocator);
+var map = std.StringHashMap(queue.Point).init(allocator);
 
 pub fn init() !void {
     queue.init() catch |e| {
@@ -33,7 +36,7 @@ pub fn init() !void {
         std.log.err("XOpenDisplay failed", .{});
         return error.XOpenDisplay;
     }
-    key_buf = std.heap.page_allocator.alloc(u8, 4) catch |e| {
+    key_buf = allocator.alloc(u8, 4) catch |e| {
         std.log.err("key_buf allocation failed: {}", .{e});
         return e;
     };
@@ -62,7 +65,7 @@ pub fn deinit() void {
     map.deinit();
     _ = c.XCloseDisplay(display);
     c.gtk_widget_destroy(window);
-    std.heap.page_allocator.free(key_buf);
+    allocator.free(key_buf);
 }
 
 pub fn run() void {
@@ -80,7 +83,7 @@ pub fn run() void {
                 c.gtk_fixed_put(@ptrCast(fixed), @ptrCast(entry), msg.pos.x, msg.pos.y);
             },
             .Point => {
-                const key = std.heap.page_allocator.dupe(
+                const key = allocator.dupeZ(
                     u8,
                     key_buf[0..create_key()],
                 ) catch |e| {
@@ -173,13 +176,13 @@ fn click(
     _: c.gpointer,
 ) void {
     const key = std.ascii.allocUpperString(
-        std.heap.page_allocator,
+        allocator,
         std.mem.span(c.gtk_entry_get_text(@ptrCast(entry))),
     ) catch {
         std.log.err("key allocation failed", .{});
         return;
     };
-    defer std.heap.page_allocator.free(key);
+    defer allocator.free(key);
     const pt = map.get(key) orelse return c.gtk_entry_set_text(@ptrCast(entry), "");
     c.gtk_widget_hide(window);
     c.gtk_main_quit();
