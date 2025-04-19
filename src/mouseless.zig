@@ -86,16 +86,10 @@ fn parse_child(obj: ?*c.AtspiAccessible) void {
             states,
             c.ATSPI_STATE_SHOWING,
         ) == 1) {
-            const size = c.atspi_component_get_size(
-                c.atspi_accessible_get_component_iface(obj),
-                null,
-            );
+            const comp = c.atspi_accessible_get_component_iface(obj);
+            const size = c.atspi_component_get_size(comp, null);
             defer c.g_free(size);
-            const pos = c.atspi_component_get_position(
-                c.atspi_accessible_get_component_iface(obj),
-                c.ATSPI_COORD_TYPE_SCREEN,
-                null,
-            );
+            const pos = c.atspi_component_get_position(comp, c.ATSPI_COORD_TYPE_SCREEN, null);
             defer c.g_free(pos);
             queue.push(.{
                 .type = .Point,
