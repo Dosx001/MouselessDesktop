@@ -63,7 +63,12 @@ fn find_active_window() bool {
                             .y = 0,
                         },
                     });
-                    parse_child(win);
+                    const collection = c.atspi_accessible_get_collection(win);
+                    defer c.g_object_unref(collection);
+                    if (collection == null) {
+                        std.log.warn("Collection not supported. Recursively parsing active window", .{});
+                        parse_child(win);
+                    } else parse_collection(collection);
                     return true;
                 }
             }
@@ -71,6 +76,58 @@ fn find_active_window() bool {
     }
     std.log.warn("No active window found for pid {}", .{pid});
     return false;
+}
+
+fn parse_collection(collection: [*c]c.AtspiCollection) void {
+    const states = [_]c.AtspiStateType{ c.ATSPI_STATE_SHOWING, c.ATSPI_STATE_VISIBLE };
+    const s_array = c.g_array_new(0, 0, @sizeOf(c.AtspiStateType));
+    defer _ = c.g_array_free(s_array, 1);
+    const state_set = c.atspi_state_set_new(c.g_array_append_vals(
+        s_array,
+        @ptrCast(&states),
+        states.len,
+    ));
+    defer c.g_object_unref(state_set);
+    const roles = [_]c.AtspiRole{
+        c.ATSPI_ROLE_CHECK_BOX,
+        c.ATSPI_ROLE_LINK,
+        c.ATSPI_ROLE_LIST_ITEM,
+        c.ATSPI_ROLE_MENU_ITEM,
+        c.ATSPI_ROLE_PAGE_TAB,
+        c.ATSPI_ROLE_PUSH_BUTTON,
+        c.ATSPI_ROLE_PUSH_BUTTON_MENU,
+        c.ATSPI_ROLE_RADIO_BUTTON,
+        c.ATSPI_ROLE_TOGGLE_BUTTON,
+    };
+    const r_array = c.g_array_new(0, 0, @sizeOf(c.AtspiRole));
+    defer _ = c.g_array_free(r_array, 1);
+    const rule = c.atspi_match_rule_new(
+        state_set,
+        c.ATSPI_Collection_MATCH_ALL,
+        null,
+        c.ATSPI_Collection_MATCH_NONE,
+        c.g_array_append_vals(
+            r_array,
+            @ptrCast(&roles),
+            roles.len,
+        ),
+        c.ATSPI_Collection_MATCH_ANY,
+        null,
+        c.ATSPI_Collection_MATCH_NONE,
+        0,
+    );
+    defer c.g_object_unref(rule);
+    const matches = c.atspi_collection_get_matches(
+        collection,
+        rule,
+        c.ATSPI_Collection_SORT_ORDER_CANONICAL,
+        0,
+        1,
+        null,
+    );
+    defer c.g_object_unref(matches);
+    const data: [*c][*c]c.AtspiAccessible = @ptrCast(@alignCast(matches.*.data));
+    for (0..matches.*.len) |i| send_point(data[i]);
 }
 
 fn parse_child(obj: ?*c.AtspiAccessible) void {
@@ -85,30 +142,32 @@ fn parse_child(obj: ?*c.AtspiAccessible) void {
         ) == 1 and c.atspi_state_set_contains(
             states,
             c.ATSPI_STATE_SHOWING,
-        ) == 1) {
-            const comp = c.atspi_accessible_get_component_iface(obj);
-            const size = c.atspi_component_get_size(comp, null);
-            defer c.g_free(size);
-            const pos = c.atspi_component_get_position(comp, c.ATSPI_COORD_TYPE_SCREEN, null);
-            defer c.g_free(pos);
-            queue.push(.{
-                .type = .Point,
-                .pos = .{
-                    .x = pos.*.x,
-                    .y = pos.*.y,
-                },
-                .size = .{
-                    .x = size.*.x,
-                    .y = size.*.y,
-                },
-            });
-        }
+        ) == 1) send_point(obj);
     }
     for (0..child_count(obj)) |i| {
         parse_child(
             c.atspi_accessible_get_child_at_index(obj, @intCast(i), null),
         );
     }
+}
+
+fn send_point(obj: ?*c.AtspiAccessible) void {
+    const comp = c.atspi_accessible_get_component_iface(obj);
+    const size = c.atspi_component_get_size(comp, null);
+    defer c.g_free(size);
+    const pos = c.atspi_component_get_position(comp, c.ATSPI_COORD_TYPE_SCREEN, null);
+    defer c.g_free(pos);
+    queue.push(.{
+        .type = .Point,
+        .pos = .{
+            .x = pos.*.x,
+            .y = pos.*.y,
+        },
+        .size = .{
+            .x = size.*.x,
+            .y = size.*.y,
+        },
+    });
 }
 
 fn child_count(child: ?*c.AtspiAccessible) usize {
