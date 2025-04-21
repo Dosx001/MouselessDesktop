@@ -3,7 +3,6 @@ const queue = @import("queue.zig");
 const std = @import("std");
 
 const c = @cImport({
-    @cInclude("X11/Xatom.h");
     @cInclude("X11/extensions/XTest.h");
     @cInclude("gtk-3.0/gtk/gtk.h");
 });

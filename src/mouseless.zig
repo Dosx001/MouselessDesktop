@@ -1,12 +1,10 @@
-const go = @import("gobject.zig");
 const queue = @import("queue.zig");
 const std = @import("std");
 
 const c = @cImport({
     @cInclude("X11/Xatom.h");
-    @cInclude("X11/extensions/XTest.h");
+    @cInclude("X11/Xlib.h");
     @cInclude("at-spi-2.0/atspi/atspi.h");
-    @cInclude("gtk-3.0/gtk/gtk.h");
 });
 
 var display: ?*c.Display = undefined;

@@ -32,7 +32,7 @@ pub fn main() !void {
     const t_ml = std.Thread.spawn(
         .{},
         ml.run,
-        .{}
+        .{},
     ) catch return std.log.err("unable to spawn thread", .{});
     const t_win = std.Thread.spawn(
         .{},
