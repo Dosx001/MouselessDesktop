@@ -64,7 +64,6 @@ fn find_active_window() bool {
                     const collection = c.atspi_accessible_get_collection(win);
                     defer c.g_object_unref(collection);
                     if (collection == null) {
-                        std.log.warn("Collection not supported. Recursively parsing active window", .{});
                         parse_child(win);
                     } else parse_collection(collection);
                     return true;
@@ -130,18 +129,16 @@ fn parse_collection(collection: [*c]c.AtspiCollection) void {
 
 fn parse_child(obj: ?*c.AtspiAccessible) void {
     if (obj == null) return;
-    const role = c.atspi_accessible_get_role(obj, null);
-    if (check_role(role)) {
-        const states = c.atspi_accessible_get_state_set(obj);
-        defer c.g_object_unref(states);
-        if (c.atspi_state_set_contains(
-            states,
-            c.ATSPI_STATE_VISIBLE,
-        ) == 1 and c.atspi_state_set_contains(
-            states,
-            c.ATSPI_STATE_SHOWING,
-        ) == 1) send_point(obj);
-    }
+    const states = c.atspi_accessible_get_state_set(obj);
+    defer c.g_object_unref(states);
+    if (c.atspi_state_set_contains(
+        states,
+        c.ATSPI_STATE_VISIBLE,
+    ) != 1 or c.atspi_state_set_contains(
+        states,
+        c.ATSPI_STATE_SHOWING,
+    ) != 1) return;
+    if (check_role(obj)) send_point(obj);
     for (0..child_count(obj)) |i| {
         parse_child(
             c.atspi_accessible_get_child_at_index(obj, @intCast(i), null),
@@ -181,8 +178,8 @@ fn child_count(child: ?*c.AtspiAccessible) usize {
     return @intCast(index);
 }
 
-fn check_role(role: c_uint) bool {
-    return switch (role) {
+fn check_role(obj: ?*c.AtspiAccessible) bool {
+    return switch (c.atspi_accessible_get_role(obj, null)) {
         c.ATSPI_ROLE_CHECK_BOX,
         c.ATSPI_ROLE_LINK,
         c.ATSPI_ROLE_LIST_ITEM,
