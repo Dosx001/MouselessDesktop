@@ -36,38 +36,42 @@ fn findActiveWindow() bool {
         for (0..childCount(desktop)) |j| {
             const app = c.atspi_accessible_get_child_at_index(desktop, @intCast(j), null);
             defer c.g_object_unref(app);
+            if (pid != c.atspi_accessible_get_process_id(
+                app,
+                null,
+            )) continue;
             for (0..childCount(app)) |k| {
                 const win = c.atspi_accessible_get_child_at_index(app, @intCast(k), null);
                 defer c.g_object_unref(win);
                 const states = c.atspi_accessible_get_state_set(win);
                 defer c.g_object_unref(states);
-                if (pid == c.atspi_accessible_get_process_id(win, null) and
-                    c.atspi_state_set_contains(states, c.ATSPI_STATE_ACTIVE) == 1)
-                {
-                    const pos = c.atspi_component_get_position(
-                        c.atspi_accessible_get_component_iface(win),
-                        c.ATSPI_COORD_TYPE_SCREEN,
-                        null,
-                    );
-                    defer c.g_free(pos);
-                    queue.push(queue.Message{
-                        .type = .entry,
-                        .pos = .{
-                            .x = pos.*.x,
-                            .y = pos.*.y,
-                        },
-                        .size = .{
-                            .x = 0,
-                            .y = 0,
-                        },
-                    });
-                    const collection = c.atspi_accessible_get_collection(win);
-                    defer c.g_object_unref(collection);
-                    if (collection == null) {
-                        parseChild(win);
-                    } else parseCollection(collection);
-                    return true;
-                }
+                if (c.atspi_state_set_contains(
+                    states,
+                    c.ATSPI_STATE_ACTIVE,
+                ) != 1) continue;
+                const pos = c.atspi_component_get_position(
+                    c.atspi_accessible_get_component_iface(win),
+                    c.ATSPI_COORD_TYPE_SCREEN,
+                    null,
+                );
+                defer c.g_free(pos);
+                queue.push(queue.Message{
+                    .type = .entry,
+                    .pos = .{
+                        .x = pos.*.x,
+                        .y = pos.*.y,
+                    },
+                    .size = .{
+                        .x = 0,
+                        .y = 0,
+                    },
+                });
+                const collection = c.atspi_accessible_get_collection(win);
+                defer c.g_object_unref(collection);
+                if (collection == null) {
+                    parseChild(win);
+                } else parseCollection(collection);
+                return true;
             }
         }
     }
