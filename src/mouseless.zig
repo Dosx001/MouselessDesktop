@@ -23,20 +23,20 @@ pub fn deinit() void {
 
 pub fn run() void {
     queue.push(queue.Message{
-        .type = if (find_active_window()) .Show else .Done,
+        .type = if (findActiveWindow()) .done else .quit,
         .size = .{ .x = 0, .y = 0 },
         .pos = .{ .x = 0, .y = 0 },
     });
 }
 
-fn find_active_window() bool {
-    const pid = active_pid();
+fn findActiveWindow() bool {
+    const pid = activePid();
     for (0..@intCast(c.atspi_get_desktop_count())) |i| {
         const desktop: ?*c.AtspiAccessible = c.atspi_get_desktop(@intCast(i));
-        for (0..child_count(desktop)) |j| {
+        for (0..childCount(desktop)) |j| {
             const app = c.atspi_accessible_get_child_at_index(desktop, @intCast(j), null);
             defer c.g_object_unref(app);
-            for (0..child_count(app)) |k| {
+            for (0..childCount(app)) |k| {
                 const win = c.atspi_accessible_get_child_at_index(app, @intCast(k), null);
                 defer c.g_object_unref(win);
                 const states = c.atspi_accessible_get_state_set(win);
@@ -51,7 +51,7 @@ fn find_active_window() bool {
                     );
                     defer c.g_free(pos);
                     queue.push(queue.Message{
-                        .type = .Entry,
+                        .type = .entry,
                         .pos = .{
                             .x = pos.*.x,
                             .y = pos.*.y,
@@ -64,8 +64,8 @@ fn find_active_window() bool {
                     const collection = c.atspi_accessible_get_collection(win);
                     defer c.g_object_unref(collection);
                     if (collection == null) {
-                        parse_child(win);
-                    } else parse_collection(collection);
+                        parseChild(win);
+                    } else parseCollection(collection);
                     return true;
                 }
             }
@@ -75,7 +75,7 @@ fn find_active_window() bool {
     return false;
 }
 
-fn parse_collection(collection: [*c]c.AtspiCollection) void {
+fn parseCollection(collection: [*c]c.AtspiCollection) void {
     const states = [_]c.AtspiStateType{ c.ATSPI_STATE_SHOWING, c.ATSPI_STATE_VISIBLE };
     const s_array = c.g_array_new(0, 0, @sizeOf(c.AtspiStateType));
     defer _ = c.g_array_free(s_array, 1);
@@ -124,10 +124,10 @@ fn parse_collection(collection: [*c]c.AtspiCollection) void {
     );
     defer c.g_object_unref(matches);
     const data: [*c][*c]c.AtspiAccessible = @ptrCast(@alignCast(matches.*.data));
-    for (0..matches.*.len) |i| send_point(data[i]);
+    for (0..matches.*.len) |i| sendPoint(data[i]);
 }
 
-fn parse_child(obj: ?*c.AtspiAccessible) void {
+fn parseChild(obj: ?*c.AtspiAccessible) void {
     if (obj == null) return;
     const states = c.atspi_accessible_get_state_set(obj);
     defer c.g_object_unref(states);
@@ -138,22 +138,22 @@ fn parse_child(obj: ?*c.AtspiAccessible) void {
         states,
         c.ATSPI_STATE_SHOWING,
     ) != 1) return;
-    if (check_role(obj)) send_point(obj);
-    for (0..child_count(obj)) |i| {
-        parse_child(
+    if (checkRole(obj)) sendPoint(obj);
+    for (0..childCount(obj)) |i| {
+        parseChild(
             c.atspi_accessible_get_child_at_index(obj, @intCast(i), null),
         );
     }
 }
 
-fn send_point(obj: ?*c.AtspiAccessible) void {
+fn sendPoint(obj: ?*c.AtspiAccessible) void {
     const comp = c.atspi_accessible_get_component_iface(obj);
     const size = c.atspi_component_get_size(comp, null);
     defer c.g_free(size);
     const pos = c.atspi_component_get_position(comp, c.ATSPI_COORD_TYPE_SCREEN, null);
     defer c.g_free(pos);
     queue.push(.{
-        .type = .Point,
+        .type = .point,
         .pos = .{
             .x = pos.*.x,
             .y = pos.*.y,
@@ -165,7 +165,7 @@ fn send_point(obj: ?*c.AtspiAccessible) void {
     });
 }
 
-fn child_count(child: ?*c.AtspiAccessible) usize {
+fn childCount(child: ?*c.AtspiAccessible) usize {
     const index = c.atspi_accessible_get_child_count(child, null);
     if (index == -1) {
         const role = c.atspi_accessible_get_role_name(child, null);
@@ -178,7 +178,7 @@ fn child_count(child: ?*c.AtspiAccessible) usize {
     return @intCast(index);
 }
 
-fn check_role(obj: ?*c.AtspiAccessible) bool {
+fn checkRole(obj: ?*c.AtspiAccessible) bool {
     return switch (c.atspi_accessible_get_role(obj, null)) {
         c.ATSPI_ROLE_CHECK_BOX,
         c.ATSPI_ROLE_LINK,
@@ -194,7 +194,7 @@ fn check_role(obj: ?*c.AtspiAccessible) bool {
     };
 }
 
-fn active_pid() c_int {
+fn activePid() c_int {
     var atom = c.XInternAtom(display, "_NET_ACTIVE_WINDOW", 1);
     if (atom == c.None) return 0;
     var actual_type: c.Atom = undefined;

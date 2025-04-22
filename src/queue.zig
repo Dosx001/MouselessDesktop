@@ -3,10 +3,10 @@ const std = @import("std");
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
 pub const Type = enum {
-    Done,
-    Entry,
-    Point,
-    Show,
+    done,
+    entry,
+    point,
+    quit,
 };
 
 pub const Point = struct {

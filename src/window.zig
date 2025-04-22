@@ -38,11 +38,11 @@ pub fn init() !void {
     window = c.gtk_window_new(c.GTK_WINDOW_TOPLEVEL);
     c.gtk_window_fullscreen(@ptrCast(window));
     c.gtk_window_set_skip_taskbar_hint(@ptrCast(window), 1);
-    go.g_signal_connect(window, "delete-event", &c.gtk_main_quit, null);
+    go.gSignalConnect(window, "delete-event", &c.gtk_main_quit, null);
     fixed = c.gtk_fixed_new();
     entry = c.gtk_entry_new();
-    go.g_signal_connect(entry, "focus-out-event", &c.gtk_main_quit, null);
-    bind_keys();
+    go.gSignalConnect(entry, "focus-out-event", &c.gtk_main_quit, null);
+    bindKeys();
     c.gtk_container_add(@ptrCast(window), fixed);
     const screen = c.gtk_window_get_screen(@ptrCast(window));
     const visual = c.gdk_screen_get_rgba_visual(screen);
@@ -69,17 +69,17 @@ pub fn run() void {
             continue;
         };
         switch (msg.type) {
-            .Done => {
-                c.gtk_main_quit();
-                return;
-            },
-            .Entry => {
-                c.gtk_fixed_put(@ptrCast(fixed), @ptrCast(entry), msg.pos.x, msg.pos.y);
-            },
-            .Point => {
+            .done => return c.gtk_widget_show_all(window),
+            .entry => c.gtk_fixed_put(
+                @ptrCast(fixed),
+                @ptrCast(entry),
+                msg.pos.x,
+                msg.pos.y,
+            ),
+            .point => {
                 const key = allocator.dupeZ(
                     u8,
-                    key_buf[0..create_key()],
+                    key_buf[0..createKey()],
                 ) catch |e| {
                     std.log.err("key copy failed: {}", .{e});
                     return;
@@ -95,15 +95,12 @@ pub fn run() void {
                 const label = c.gtk_label_new(@ptrCast(key));
                 c.gtk_fixed_put(@ptrCast(fixed), label, msg.pos.x, msg.pos.y);
             },
-            .Show => {
-                c.gtk_widget_show_all(window);
-                return;
-            },
+            .quit => return c.gtk_main_quit(),
         }
     }
 }
 
-fn bind_keys() void {
+fn bindKeys() void {
     const accel_group = c.gtk_accel_group_new();
     defer c.g_object_unref(@ptrCast(accel_group));
     const clear_closure = c.g_cclosure_new(
@@ -202,7 +199,7 @@ fn click(
     _ = c.XFlush(display);
 }
 
-fn create_key() u8 {
+fn createKey() u8 {
     if (count == 0) {
         key_buf[0] = chars[0];
         return 1;

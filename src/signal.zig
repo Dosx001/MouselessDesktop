@@ -6,20 +6,20 @@ const c = @cImport({
 });
 
 pub fn setup() void {
-    _ = c.signal(c.SIGHUP, gtk_quit);
-    _ = c.signal(c.SIGINT, gtk_quit);
-    _ = c.signal(c.SIGQUIT, gtk_quit);
-    _ = c.signal(c.SIGILL, gtk_quit);
-    _ = c.signal(c.SIGABRT, reset);
-    _ = c.signal(c.SIGSEGV, reset);
-    _ = c.signal(c.SIGTERM, gtk_quit);
+    _ = c.signal(c.SIGHUP, gtkQuit);
+    _ = c.signal(c.SIGINT, gtkQuit);
+    _ = c.signal(c.SIGQUIT, gtkQuit);
+    _ = c.signal(c.SIGILL, gtkQuit);
+    _ = c.signal(c.SIGABRT, exit);
+    _ = c.signal(c.SIGSEGV, exit);
+    _ = c.signal(c.SIGTERM, gtkQuit);
 }
 
-fn gtk_quit(_: c_int) callconv(.C) void {
+fn gtkQuit(_: c_int) callconv(.C) void {
     c.gtk_main_quit();
 }
 
-fn reset(signal: c_int) callconv(.C) void {
+fn exit(signal: c_int) callconv(.C) void {
     switch (signal) {
         c.SIGILL => std.log.err("Illegal instruction", .{}),
         c.SIGABRT => std.log.err("Error program aborted", .{}),

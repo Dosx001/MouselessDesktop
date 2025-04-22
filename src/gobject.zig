@@ -2,7 +2,7 @@ const c = @cImport({
     @cInclude("glib-object.h");
 });
 
-pub fn g_signal_connect(
+pub fn gSignalConnect(
     instance: c.gpointer,
     detailed_signal: [*c]const c.gchar,
     c_handler: c.GCallback,
