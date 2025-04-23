@@ -152,19 +152,18 @@ fn parseChild(obj: ?*c.AtspiAccessible) void {
 
 fn sendPoint(obj: ?*c.AtspiAccessible) void {
     const comp = c.atspi_accessible_get_component_iface(obj);
-    const size = c.atspi_component_get_size(comp, null);
-    defer c.g_free(size);
-    const pos = c.atspi_component_get_position(comp, c.ATSPI_COORD_TYPE_SCREEN, null);
-    defer c.g_free(pos);
+    defer c.g_object_unref(comp);
+    const rect = c.atspi_component_get_extents(comp, c.ATSPI_COORD_TYPE_SCREEN, null);
+    defer c.g_free(rect);
     queue.push(.{
         .type = .point,
         .pos = .{
-            .x = pos.*.x,
-            .y = pos.*.y,
+            .x = rect.*.x,
+            .y = rect.*.y,
         },
         .size = .{
-            .x = size.*.x,
-            .y = size.*.y,
+            .x = rect.*.width,
+            .y = rect.*.height,
         },
     });
 }
