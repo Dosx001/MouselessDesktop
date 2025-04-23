@@ -64,39 +64,37 @@ pub fn deinit() void {
 
 pub fn run() void {
     while (true) {
-        const msg = if (queue.pop()) |m| m else {
-            std.time.sleep(100_000_000);
-            continue;
-        };
-        switch (msg.type) {
-            .done => return c.gtk_widget_show_all(window),
-            .entry => c.gtk_fixed_put(
-                @ptrCast(fixed),
-                @ptrCast(entry),
-                msg.pos.x,
-                msg.pos.y,
-            ),
-            .point => {
-                const key = allocator.dupeZ(
-                    u8,
-                    key_buf[0..createKey()],
-                ) catch |e| {
-                    std.log.err("key copy failed: {}", .{e});
-                    return;
-                };
-                map.put(key, .{
-                    .x = @divFloor(2 * msg.pos.x + msg.size.x, 2),
-                    .y = @divFloor(2 * msg.pos.y + msg.size.y, 2),
-                }) catch |e| {
-                    std.log.err("point allocation failed: {}", .{e});
-                    return;
-                };
-                count += 1;
-                const label = c.gtk_label_new(@ptrCast(key));
-                c.gtk_fixed_put(@ptrCast(fixed), label, msg.pos.x, msg.pos.y);
-            },
-            .quit => return c.gtk_main_quit(),
-        }
+        if (queue.pop()) |msg| {
+            switch (msg.type) {
+                .done => return c.gtk_widget_show_all(window),
+                .entry => c.gtk_fixed_put(
+                    @ptrCast(fixed),
+                    @ptrCast(entry),
+                    msg.pos.x,
+                    msg.pos.y,
+                ),
+                .point => {
+                    const key = allocator.dupeZ(
+                        u8,
+                        key_buf[0..createKey()],
+                    ) catch |e| {
+                        std.log.err("key copy failed: {}", .{e});
+                        return;
+                    };
+                    map.put(key, .{
+                        .x = @divFloor(2 * msg.pos.x + msg.size.x, 2),
+                        .y = @divFloor(2 * msg.pos.y + msg.size.y, 2),
+                    }) catch |e| {
+                        std.log.err("point allocation failed: {}", .{e});
+                        return;
+                    };
+                    count += 1;
+                    const label = c.gtk_label_new(@ptrCast(key));
+                    c.gtk_fixed_put(@ptrCast(fixed), label, msg.pos.x, msg.pos.y);
+                },
+                .quit => return c.gtk_main_quit(),
+            }
+        } else std.time.sleep(100_000_000);
     }
 }
 
