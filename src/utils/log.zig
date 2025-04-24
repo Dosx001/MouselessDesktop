@@ -4,6 +4,17 @@ const c = @cImport({
     @cInclude("syslog.h");
 });
 
+var print: bool = false;
+
+pub fn init(console_log: bool) void {
+    print = console_log;
+    _ = c.notify_init("MouselessDesktop");
+}
+
+pub fn deinit() void {
+    c.notify_uninit();
+}
+
 pub fn logger(
     comptime level: std.log.Level,
     comptime scope: @TypeOf(.EnumLiteral),
@@ -11,7 +22,7 @@ pub fn logger(
     args: anytype,
 ) void {
     const scope_name = if (scope == .default) "" else "(" ++ @tagName(scope) ++ "): ";
-    if (@import("builtin").mode == .Debug) {
+    if (print and @import("builtin").mode == .Debug) {
         std.debug.lockStdErr();
         defer std.debug.unlockStdErr();
         const stderr = std.io.getStdErr().writer();
@@ -21,12 +32,11 @@ pub fn logger(
         ) catch return;
     }
     var buf: [256]u8 = undefined;
-    const msg = std.fmt.bufPrint(
+    const msg = std.fmt.bufPrintZ(
         &buf,
         scope_name ++ format,
         args,
     ) catch return;
-    buf[msg.len] = 0;
     if (@intFromEnum(level) < @intFromEnum(std.log.Level.info)) {
         const note = c.notify_notification_new("MouselessDesktop", msg.ptr, null);
         _ = c.notify_notification_show(note, null);

@@ -2,20 +2,20 @@ const ml = @import("mouseless.zig");
 const sig = @import("signal.zig");
 const std = @import("std");
 const win = @import("window.zig");
+const log = @import("utils/log.zig");
 
 const c = @cImport({
     @cInclude("gtk-3.0/gtk/gtk.h");
-    @cInclude("libnotify/notify.h");
 });
 
 pub const std_options: std.Options = .{
-    .logFn = @import("log.zig").logger,
+    .logFn = log.logger,
 };
 
 pub fn main() !void {
     sig.setup();
-    _ = c.notify_init("MouselessDesktop");
-    defer c.notify_uninit();
+    log.init(false);
+    defer log.deinit();
     if (1 < std.os.argv.len) {
         _ = switch (std.os.argv[1][0]) {
             else => {},
