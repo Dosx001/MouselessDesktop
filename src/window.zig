@@ -88,7 +88,6 @@ pub fn run() void {
                         std.log.err("point allocation failed: {}", .{e});
                         return;
                     };
-                    count += 1;
                     const label = c.gtk_label_new(@ptrCast(key));
                     c.gtk_fixed_put(@ptrCast(fixed), label, msg.pos.x, msg.pos.y);
                 },
@@ -198,6 +197,7 @@ fn click(
 }
 
 fn createKey() u8 {
+    defer count += 1;
     if (count == 0) {
         key_buf[0] = chars[0];
         return 1;
