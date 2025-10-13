@@ -26,15 +26,7 @@ const chars = ";ALSKDJFIWOE";
 var key_buf: [4]u8 = [_]u8{ 0, 0, 0, 0 };
 var map = std.StringHashMap(queue.Point).init(allocator);
 
-pub fn init() !void {
-    queue.init() catch |e| {
-        return e;
-    };
-    display = c.XOpenDisplay(null);
-    if (display == null) {
-        std.log.err("XOpenDisplay failed", .{});
-        return error.XOpenDisplay;
-    }
+pub fn init() void {
     window = c.gtk_window_new(c.GTK_WINDOW_TOPLEVEL);
     c.gtk_window_fullscreen(@ptrCast(window));
     c.gtk_window_set_skip_taskbar_hint(@ptrCast(window), 1);
@@ -93,7 +85,7 @@ pub fn run() void {
                 },
                 .quit => return c.gtk_main_quit(),
             }
-        } else std.time.sleep(100_000_000);
+        } else std.Thread.sleep(100 * std.time.ns_per_ms);
     }
 }
 

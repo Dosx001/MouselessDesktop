@@ -15,11 +15,11 @@ pub fn setup() void {
     _ = c.signal(c.SIGTERM, gtkQuit);
 }
 
-fn gtkQuit(_: c_int) callconv(.C) void {
+fn gtkQuit(_: c_int) callconv(.c) void {
     c.gtk_main_quit();
 }
 
-fn exit(signal: c_int) callconv(.C) void {
+fn exit(signal: c_int) callconv(.c) void {
     switch (signal) {
         c.SIGILL => std.log.err("Illegal instruction", .{}),
         c.SIGABRT => std.log.err("Error program aborted", .{}),

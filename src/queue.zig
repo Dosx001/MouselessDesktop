@@ -1,7 +1,5 @@
 const std = @import("std");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-
 pub const Type = enum {
     done,
     entry,
@@ -20,29 +18,23 @@ pub const Message = struct {
     type: Type,
 };
 
-pub var queue: std.fifo.LinearFifo(
-    Message,
-    .Dynamic,
-) = undefined;
-
-pub fn init() !void {
-    queue = std.fifo.LinearFifo(
-        Message,
-        .Dynamic,
-    ).init(gpa.allocator());
-    queue.ensureTotalCapacity(128) catch
-        return error.QueueAlloc;
-}
-
-pub fn deinit() void {
-    queue.deinit();
-}
+var queue: [256]Message = undefined;
+var count: usize = 0;
+var head: usize = 0;
+var tail: usize = 0;
 
 pub fn push(msg: Message) void {
-    queue.writeItem(msg) catch
-        std.log.err("queue overflow", .{});
+    while (count == queue.len)
+        std.Thread.sleep(100 * std.time.ns_per_ms);
+    queue[tail] = msg;
+    count += 1;
+    tail = (tail + 1) % queue.len;
 }
 
 pub fn pop() ?Message {
-    return queue.readItem();
+    if (count == 0) return null;
+    const msg = queue[head];
+    count -= 1;
+    head = (head + 1) % queue.len;
+    return msg;
 }

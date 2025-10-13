@@ -67,10 +67,10 @@ fn findActiveWindow() bool {
                     },
                 });
                 const collection = c.atspi_accessible_get_collection(win);
-                defer c.g_object_unref(collection);
-                if (collection == null) {
-                    parseChild(win);
-                } else parseCollection(collection);
+                if (collection != null) {
+                    parseCollection(collection);
+                    c.g_object_unref(collection);
+                } else parseChild(win);
                 return true;
             }
         }
@@ -126,7 +126,7 @@ fn parseCollection(collection: [*c]c.AtspiCollection) void {
         1,
         null,
     );
-    defer c.g_object_unref(matches);
+    defer _ = c.g_array_free(matches, 1);
     const data: [*c][*c]c.AtspiAccessible = @ptrCast(@alignCast(matches.*.data));
     for (0..matches.*.len) |i| sendPoint(data[i]);
 }

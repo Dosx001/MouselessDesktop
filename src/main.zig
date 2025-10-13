@@ -25,7 +25,7 @@ pub fn main() !void {
     var argc: c_int = @intCast(std.os.argv.len);
     var argv: [*c][*c]u8 = @ptrCast(std.os.argv.ptr);
     c.gtk_init(&argc, &argv);
-    try win.init();
+    win.init();
     defer win.deinit();
     try ml.init();
     defer ml.deinit();
