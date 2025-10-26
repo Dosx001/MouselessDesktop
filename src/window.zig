@@ -3,14 +3,15 @@ const queue = @import("queue.zig");
 const std = @import("std");
 
 const c = @cImport({
-    @cInclude("X11/extensions/XTest.h");
+    @cInclude("fcntl.h");
     @cInclude("gtk-3.0/gtk/gtk.h");
+    @cInclude("linux/uinput.h");
 });
 
 const Click = enum {
-    double,
+    left,
     middle,
-    single,
+    right,
 };
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -19,7 +20,8 @@ const allocator = gpa.allocator();
 var window: *c.GtkWidget = undefined;
 var fixed: *c.GtkWidget = undefined;
 var entry: *c.GtkWidget = undefined;
-var display: ?*c.Display = undefined;
+var height: c_int = 0;
+var width: c_int = 0;
 
 var count: usize = 0;
 const chars = ";ALSKDJFIWOE";
@@ -37,6 +39,8 @@ pub fn init() void {
     bindKeys();
     c.gtk_container_add(@ptrCast(window), fixed);
     const screen = c.gtk_window_get_screen(@ptrCast(window));
+    height = c.gdk_screen_get_height(screen);
+    width = c.gdk_screen_get_width(screen);
     const visual = c.gdk_screen_get_rgba_visual(screen);
     if (visual != null) c.gtk_widget_set_visual(window, visual);
     const css_provider = c.gtk_css_provider_new();
@@ -50,7 +54,6 @@ pub fn init() void {
 
 pub fn deinit() void {
     map.deinit();
-    _ = c.XCloseDisplay(display);
     c.gtk_widget_destroy(window);
 }
 
@@ -105,46 +108,84 @@ fn bindKeys() void {
         0,
         clear_closure,
     );
-    const click_double_closure = c.g_cclosure_new(
+    const right_click_closure = c.g_cclosure_new(
         @ptrCast(&click),
-        c.GINT_TO_POINTER(@intFromEnum(Click.double)),
+        c.GINT_TO_POINTER(@intFromEnum(Click.right)),
         null,
     );
-    defer c.g_closure_unref(click_double_closure);
+    defer c.g_closure_unref(right_click_closure);
     c.gtk_accel_group_connect(
         accel_group,
         c.GDK_KEY_Return,
         c.GDK_CONTROL_MASK,
         0,
-        click_double_closure,
+        right_click_closure,
     );
-    const click_middle_closure = c.g_cclosure_new(
+    const middle_click_closure = c.g_cclosure_new(
         @ptrCast(&click),
         c.GINT_TO_POINTER(@intFromEnum(Click.middle)),
         null,
     );
-    defer c.g_closure_unref(click_middle_closure);
+    defer c.g_closure_unref(middle_click_closure);
     c.gtk_accel_group_connect(
         accel_group,
         c.GDK_KEY_Return,
         c.GDK_MOD1_MASK,
         0,
-        click_middle_closure,
+        middle_click_closure,
     );
-    const click_single_closure = c.g_cclosure_new(
+    const left_click_closure = c.g_cclosure_new(
         @ptrCast(&click),
-        c.GINT_TO_POINTER(@intFromEnum(Click.single)),
+        c.GINT_TO_POINTER(@intFromEnum(Click.left)),
         null,
     );
-    defer c.g_closure_unref(click_single_closure);
+    defer c.g_closure_unref(left_click_closure);
     c.gtk_accel_group_connect(
         accel_group,
         c.GDK_KEY_Return,
         0,
         0,
-        click_single_closure,
+        left_click_closure,
     );
     c.gtk_window_add_accel_group(@ptrCast(window), accel_group);
+}
+
+fn uinput() c_int {
+    const fd = c.open("/dev/uinput", c.O_WRONLY | c.O_NONBLOCK);
+    if (fd < 0) {
+        std.log.err("Failed to open /dev/uinput", .{});
+        std.posix.exit(1);
+    }
+    _ = c.ioctl(fd, c.UI_SET_EVBIT, c.EV_KEY);
+    var name: [80]u8 = undefined;
+    @memcpy(name[0..9], "mouseless");
+    _ = c.ioctl(
+        fd,
+        c.UI_DEV_SETUP,
+        &c.uinput_setup{ .name = name },
+    );
+    return fd;
+}
+
+fn emit(
+    fd: c_int,
+    ev_type: c_ushort,
+    code: c_ushort,
+    val: c_int,
+) void {
+    _ = c.write(
+        fd,
+        &c.input_event{
+            .type = ev_type,
+            .code = code,
+            .value = val,
+            .time = .{
+                .tv_sec = 0,
+                .tv_usec = 0,
+            },
+        },
+        @sizeOf(c.input_event),
+    );
 }
 
 fn click(
@@ -163,29 +204,53 @@ fn click(
         return;
     };
     defer allocator.free(key);
-    const pt = map.get(key) orelse return c.gtk_entry_set_text(@ptrCast(entry), "");
+    const pt = map.get(key) orelse
+        return c.gtk_entry_set_text(@ptrCast(entry), "");
     c.gtk_widget_hide(window);
     c.gtk_main_quit();
-    const root = c.DefaultRootWindow(display);
-    _ = c.XWarpPointer(display, c.None, root, 0, 0, 0, 0, pt.x, pt.y);
-    while (c.g_main_context_iteration(c.g_main_context_default(), c.FALSE) == 1) {}
-    switch (@as(Click, @enumFromInt(c.GPOINTER_TO_INT(data)))) {
-        Click.double => {
-            _ = c.XTestFakeButtonEvent(display, 1, 1, c.CurrentTime);
-            _ = c.XTestFakeButtonEvent(display, 1, 0, c.CurrentTime);
-            _ = c.XTestFakeButtonEvent(display, 1, 1, c.CurrentTime);
-            _ = c.XTestFakeButtonEvent(display, 1, 0, c.CurrentTime);
+    const fd = uinput();
+    defer _ = c.close(fd);
+    while (c.g_main_context_iteration(
+        c.g_main_context_default(),
+        c.FALSE,
+    ) == 1) {}
+    const btn: c_ushort = @intCast(switch (@as(
+        Click,
+        @enumFromInt(c.GPOINTER_TO_INT(data)),
+    )) {
+        Click.right => c.BTN_RIGHT,
+        Click.middle => c.BTN_MIDDLE,
+        Click.left => c.BTN_LEFT,
+    });
+    _ = c.ioctl(fd, c.UI_SET_KEYBIT, btn);
+    _ = c.ioctl(fd, c.UI_SET_EVBIT, c.EV_ABS);
+    _ = c.ioctl(fd, c.UI_SET_ABSBIT, c.ABS_X);
+    _ = c.ioctl(fd, c.UI_SET_ABSBIT, c.ABS_Y);
+    var abs_setup = c.uinput_abs_setup{
+        .code = c.ABS_X,
+        .absinfo = .{
+            .minimum = 0,
+            .maximum = width,
         },
-        Click.middle => {
-            _ = c.XTestFakeButtonEvent(display, 2, 1, c.CurrentTime);
-            _ = c.XTestFakeButtonEvent(display, 2, 0, c.CurrentTime);
-        },
-        Click.single => {
-            _ = c.XTestFakeButtonEvent(display, 1, 1, c.CurrentTime);
-            _ = c.XTestFakeButtonEvent(display, 1, 0, c.CurrentTime);
-        },
-    }
-    _ = c.XFlush(display);
+    };
+    _ = c.ioctl(fd, c.UI_ABS_SETUP, &abs_setup);
+    abs_setup.code = c.ABS_Y;
+    abs_setup.absinfo.maximum = height;
+    _ = c.ioctl(fd, c.UI_ABS_SETUP, &abs_setup);
+    _ = c.ioctl(fd, c.UI_DEV_CREATE);
+    std.Thread.sleep(500 * std.time.ns_per_ms);
+    while (c.g_main_context_iteration(c.g_main_context_default(), 0) == 1) {}
+    emit(fd, c.EV_ABS, c.ABS_X, pt.x);
+    emit(fd, c.EV_ABS, c.ABS_Y, pt.y);
+    emit(fd, c.EV_SYN, c.SYN_REPORT, 0);
+    std.Thread.sleep(100 * std.time.ns_per_ms);
+    emit(fd, c.EV_KEY, btn, 1);
+    emit(fd, c.EV_SYN, c.SYN_REPORT, 0);
+    std.Thread.sleep(100 * std.time.ns_per_ms);
+    emit(fd, c.EV_KEY, btn, 0);
+    emit(fd, c.EV_SYN, c.SYN_REPORT, 0);
+    std.Thread.sleep(500 * std.time.ns_per_ms);
+    _ = c.ioctl(fd, c.UI_DEV_DESTROY);
 }
 
 fn createKey() u8 {

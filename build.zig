@@ -17,7 +17,6 @@ pub fn build(b: *std.Build) void {
 
     exe.linkLibC();
     exe.linkSystemLibrary("X11");
-    exe.linkSystemLibrary("Xtst");
     exe.linkSystemLibrary("atspi-2");
     exe.linkSystemLibrary("gtk+-3.0");
     exe.linkSystemLibrary("libnotify");
