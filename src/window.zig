@@ -151,7 +151,7 @@ fn uinput() c_int {
         std.posix.exit(1);
     }
     _ = c.ioctl(fd, c.UI_SET_EVBIT, c.EV_KEY);
-    var name: [80]u8 = undefined;
+    var name = [_]u8{0} ** 80;
     @memcpy(name[0..9], "mouseless");
     _ = c.ioctl(
         fd,
@@ -185,7 +185,7 @@ fn click(
     _: [*c]const c.GValue,
     data: c.gpointer,
     _: c.gpointer,
-) void {
+) callconv(.c) void {
     const key = std.ascii.allocUpperString(
         allocator,
         std.mem.span(c.gtk_entry_get_text(@ptrCast(entry))),
