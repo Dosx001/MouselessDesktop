@@ -8,12 +8,6 @@ const c = @cImport({
     @cInclude("linux/uinput.h");
 });
 
-const Click = enum {
-    left,
-    middle,
-    right,
-};
-
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator = gpa.allocator();
 
@@ -109,8 +103,8 @@ fn bindKeys() void {
         clear_closure,
     );
     const right_click_closure = c.g_cclosure_new(
-        @ptrCast(&click),
-        c.GINT_TO_POINTER(@intFromEnum(Click.right)),
+        c.G_CALLBACK(click),
+        c.GINT_TO_POINTER(c.BTN_RIGHT),
         null,
     );
     defer c.g_closure_unref(right_click_closure);
@@ -122,8 +116,8 @@ fn bindKeys() void {
         right_click_closure,
     );
     const middle_click_closure = c.g_cclosure_new(
-        @ptrCast(&click),
-        c.GINT_TO_POINTER(@intFromEnum(Click.middle)),
+        c.G_CALLBACK(click),
+        c.GINT_TO_POINTER(c.BTN_MIDDLE),
         null,
     );
     defer c.g_closure_unref(middle_click_closure);
@@ -135,8 +129,8 @@ fn bindKeys() void {
         middle_click_closure,
     );
     const left_click_closure = c.g_cclosure_new(
-        @ptrCast(&click),
-        c.GINT_TO_POINTER(@intFromEnum(Click.left)),
+        c.G_CALLBACK(click),
+        c.GINT_TO_POINTER(c.BTN_LEFT),
         null,
     );
     defer c.g_closure_unref(left_click_closure);
@@ -179,10 +173,6 @@ fn emit(
             .type = ev_type,
             .code = code,
             .value = val,
-            .time = .{
-                .tv_sec = 0,
-                .tv_usec = 0,
-            },
         },
         @sizeOf(c.input_event),
     );
@@ -210,18 +200,11 @@ fn click(
     c.gtk_main_quit();
     const fd = uinput();
     defer _ = c.close(fd);
+    const btn: c_ushort = @intCast(c.GPOINTER_TO_INT(data));
     while (c.g_main_context_iteration(
         c.g_main_context_default(),
         c.FALSE,
     ) == 1) {}
-    const btn: c_ushort = @intCast(switch (@as(
-        Click,
-        @enumFromInt(c.GPOINTER_TO_INT(data)),
-    )) {
-        Click.right => c.BTN_RIGHT,
-        Click.middle => c.BTN_MIDDLE,
-        Click.left => c.BTN_LEFT,
-    });
     _ = c.ioctl(fd, c.UI_SET_KEYBIT, btn);
     _ = c.ioctl(fd, c.UI_SET_EVBIT, c.EV_ABS);
     _ = c.ioctl(fd, c.UI_SET_ABSBIT, c.ABS_X);
@@ -239,7 +222,6 @@ fn click(
     _ = c.ioctl(fd, c.UI_ABS_SETUP, &abs_setup);
     _ = c.ioctl(fd, c.UI_DEV_CREATE);
     std.Thread.sleep(500 * std.time.ns_per_ms);
-    while (c.g_main_context_iteration(c.g_main_context_default(), 0) == 1) {}
     emit(fd, c.EV_ABS, c.ABS_X, pt.x);
     emit(fd, c.EV_ABS, c.ABS_Y, pt.y);
     emit(fd, c.EV_SYN, c.SYN_REPORT, 0);
