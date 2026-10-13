@@ -1,18 +1,12 @@
+const log = @import("log");
 const std = @import("std");
-const c = @cImport({
-    @cInclude("libnotify/notify.h");
-    @cInclude("syslog.h");
-});
 
-var print: bool = false;
-
-pub fn init(console_log: bool) void {
-    print = console_log;
-    _ = c.notify_init("MouselessDesktop");
+pub fn init() void {
+    _ = log.notify_init("MouselessDesktop");
 }
 
 pub fn deinit() void {
-    c.notify_uninit();
+    log.notify_uninit();
 }
 
 pub fn logger(
@@ -21,31 +15,40 @@ pub fn logger(
     comptime format: []const u8,
     args: anytype,
 ) void {
-    const scope_name = if (scope == .default) "" else "(" ++ @tagName(scope) ++ "): ";
-    if (print and @import("builtin").mode == .Debug) {
-        std.debug.lockStdErr();
-        defer std.debug.unlockStdErr();
-        const stderr = std.fs.File.stderr().deprecatedWriter();
-        nosuspend stderr.print(
-            @tagName(level) ++ "|" ++ scope_name ++ format ++ "\n",
-            args,
-        ) catch return;
+    var buf: [128]u8 = @splat(0);
+    const tty = 1 == std.posix.system.isatty(
+        std.posix.system.STDERR_FILENO,
+    );
+    if (tty) {
+        const io = std.Options.debug_io;
+        const prev = io.swapCancelProtection(.blocked);
+        defer _ = io.swapCancelProtection(prev);
+        const stderr = std.debug.lockStderr(&buf).terminal();
+        defer std.debug.unlockStderr();
+        std.log.defaultLogFileTerminal(level, scope, format, args, stderr) catch |err| {
+            std.log.err("Failed to write log message: {}", .{err});
+            return;
+        };
     }
-    var buf: [256]u8 = undefined;
-    const msg = std.fmt.bufPrintZ(
+    const msg = std.fmt.bufPrintSentinel(
         &buf,
-        scope_name ++ format,
+        format,
         args,
-    ) catch return;
+        0,
+    ) catch |err| {
+        std.log.err("Failed to format log message: {}", .{err});
+        return;
+    };
     if (@intFromEnum(level) < @intFromEnum(std.log.Level.info)) {
-        const note = c.notify_notification_new("MouselessDesktop", msg.ptr, null);
-        _ = c.notify_notification_show(note, null);
-        _ = c.g_object_unref(note);
+        const note = log.notify_notification_new("MouselessDesktop", msg.ptr, null);
+        _ = log.notify_notification_show(note, null);
+        _ = log.g_object_unref(note);
     }
-    c.syslog(switch (level) {
-        .err => c.LOG_ERR,
-        .warn => c.LOG_WARNING,
-        .info => c.LOG_INFO,
-        .debug => c.LOG_DEBUG,
+    if (tty) return;
+    log.syslog(switch (level) {
+        .err => log.LOG_ERR,
+        .warn => log.LOG_WARNING,
+        .info => log.LOG_INFO,
+        .debug => log.LOG_DEBUG,
     }, "%s", msg.ptr);
 }

@@ -1,30 +1,32 @@
 const std = @import("std");
+const posix = std.posix;
 
-const c = @cImport({
-    @cInclude("gtk-3.0/gtk/gtk.h");
-    @cInclude("signal.h");
-});
-
-pub fn setup() void {
-    _ = c.signal(c.SIGHUP, gtkQuit);
-    _ = c.signal(c.SIGINT, gtkQuit);
-    _ = c.signal(c.SIGQUIT, gtkQuit);
-    _ = c.signal(c.SIGILL, gtkQuit);
-    _ = c.signal(c.SIGABRT, exit);
-    _ = c.signal(c.SIGSEGV, exit);
-    _ = c.signal(c.SIGTERM, gtkQuit);
+pub fn init() void {
+    var sa = posix.Sigaction{
+        .handler = .{ .handler = quit },
+        .mask = posix.sigemptyset(),
+        .flags = 0,
+    };
+    posix.sigaction(posix.SIG.HUP, &sa, null);
+    posix.sigaction(posix.SIG.INT, &sa, null);
+    posix.sigaction(posix.SIG.QUIT, &sa, null);
+    posix.sigaction(posix.SIG.TERM, &sa, null);
+    sa.handler = .{ .handler = exit };
+    posix.sigaction(posix.SIG.ILL, &sa, null);
+    posix.sigaction(posix.SIG.ABRT, &sa, null);
+    posix.sigaction(posix.SIG.SEGV, &sa, null);
 }
 
-fn gtkQuit(_: c_int) callconv(.c) void {
-    c.gtk_main_quit();
+fn quit(_: posix.SIG) callconv(.c) void {
+    std.posix.system.exit(0);
 }
 
-fn exit(signal: c_int) callconv(.c) void {
+fn exit(signal: posix.SIG) callconv(.c) void {
     switch (signal) {
-        c.SIGILL => std.log.err("Illegal instruction", .{}),
-        c.SIGABRT => std.log.err("Error program aborted", .{}),
-        c.SIGSEGV => std.log.err("Segmentation fault", .{}),
+        posix.SIG.ILL => std.log.err("Illegal instruction", .{}),
+        posix.SIG.ABRT => std.log.err("Error program aborted", .{}),
+        posix.SIG.SEGV => std.log.err("Segmentation fault", .{}),
         else => {},
     }
-    std.posix.exit(1);
+    posix.system.exit(1);
 }
