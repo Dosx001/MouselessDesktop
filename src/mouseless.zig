@@ -16,15 +16,16 @@ pub fn deinit() void {
     _ = atspi.XCloseDisplay(display);
 }
 
-pub fn run() void {
-    queue.push(queue.Message{
-        .type = if (findActiveWindow()) .done else .quit,
-        .size = .{ .x = 0, .y = 0 },
-        .pos = .{ .x = 0, .y = 0 },
+pub fn run(io: std.Io) void {
+    queue.push(io, queue.Message{
+        .type = if (findActiveWindow(io))
+            .Done
+        else
+            .Quit
     });
 }
 
-fn findActiveWindow() bool {
+fn findActiveWindow(io: std.Io) bool {
     const pid = activePid();
     for (0..@intCast(atspi.atspi_get_desktop_count())) |i| {
         const desktop: ?*atspi.AtspiAccessible = atspi.atspi_get_desktop(
@@ -60,22 +61,20 @@ fn findActiveWindow() bool {
                     null,
                 );
                 defer atspi.g_free(pos);
-                queue.push(queue.Message{
-                    .type = .entry,
+                queue.push(io, queue.Message{
+                    .type = .Entry,
                     .pos = .{
                         .x = pos.*.x,
                         .y = pos.*.y,
                     },
-                    .size = .{
-                        .x = 0,
-                        .y = 0,
-                    },
                 });
-                const collection = atspi.atspi_accessible_get_collection(win);
+                const collection = atspi.atspi_accessible_get_collection(
+                    win,
+                );
                 if (collection != null) {
-                    parseCollection(collection);
+                    parseCollection(io, collection);
                     atspi.g_object_unref(collection);
-                } else parseChild(win);
+                } else parseChild(io, win);
                 return true;
             }
         }
@@ -84,7 +83,10 @@ fn findActiveWindow() bool {
     return false;
 }
 
-fn parseCollection(collection: [*c]atspi.AtspiCollection) void {
+fn parseCollection(
+    io: std.Io,
+    collection: [*c]atspi.AtspiCollection,
+) void {
     const states = [_]atspi.AtspiStateType{
         atspi.ATSPI_STATE_SHOWING,
         atspi.ATSPI_STATE_VISIBLE,
@@ -144,10 +146,14 @@ fn parseCollection(collection: [*c]atspi.AtspiCollection) void {
     );
     defer _ = atspi.g_array_free(matches, 1);
     const data: [*c][*c]atspi.AtspiAccessible = @ptrCast(@alignCast(matches.*.data));
-    for (0..matches.*.len) |i| sendPoint(data[i]);
+    for (0..matches.*.len) |i|
+        sendPoint(io, data[i]);
 }
 
-fn parseChild(obj: ?*atspi.AtspiAccessible) void {
+fn parseChild(
+    io: std.Io,
+    obj: ?*atspi.AtspiAccessible,
+) void {
     if (obj == null) return;
     const states = atspi.atspi_accessible_get_state_set(obj);
     defer atspi.g_object_unref(states);
@@ -158,9 +164,10 @@ fn parseChild(obj: ?*atspi.AtspiAccessible) void {
         states,
         atspi.ATSPI_STATE_SHOWING,
     ) != 1) return;
-    if (checkRole(obj)) sendPoint(obj);
+    if (checkRole(obj)) sendPoint(io, obj);
     for (0..childCount(obj)) |i| {
         parseChild(
+            io,
             atspi.atspi_accessible_get_child_at_index(
                 obj,
                 @intCast(i),
@@ -170,7 +177,10 @@ fn parseChild(obj: ?*atspi.AtspiAccessible) void {
     }
 }
 
-fn sendPoint(obj: ?*atspi.AtspiAccessible) void {
+fn sendPoint(
+    io: std.Io,
+    obj: ?*atspi.AtspiAccessible,
+) void {
     const comp = atspi.atspi_accessible_get_component_iface(obj);
     defer atspi.g_object_unref(comp);
     const rect = atspi.atspi_component_get_extents(
@@ -179,8 +189,8 @@ fn sendPoint(obj: ?*atspi.AtspiAccessible) void {
         null,
     );
     defer atspi.g_free(rect);
-    queue.push(.{
-        .type = .point,
+    queue.push(io, .{
+        .type = .Point,
         .pos = .{
             .x = rect.*.x,
             .y = rect.*.y,

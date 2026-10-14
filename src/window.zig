@@ -72,50 +72,46 @@ pub fn deinit() void {
 
 pub fn run(io: std.Io, allocator: std.mem.Allocator) void {
     while (true) {
-        if (queue.pop()) |msg| {
-            switch (msg.type) {
-                .done => {
-                    gtk.gtk_widget_show_all(window);
-                    gtk.gtk_main();
+        const msg = queue.pop(io);
+        switch (msg.type) {
+            .Done => {
+                gtk.gtk_widget_show_all(window);
+                gtk.gtk_main();
+                return;
+            },
+            .Entry => gtk.gtk_fixed_put(
+                @ptrCast(fixed),
+                entry,
+                msg.pos.x,
+                msg.pos.y,
+            ),
+            .Point => {
+                @branchHint(.likely);
+                const key = allocator.dupeSentinel(
+                    u8,
+                    key_buf[0..createKey()],
+                    0,
+                ) catch |err| {
+                    std.log.err("key copy failed: {}", .{err});
                     return;
-                },
-                .entry => gtk.gtk_fixed_put(
+                };
+                map.put(key, .{
+                    .x = @divFloor(2 * msg.pos.x + msg.size.x, 2),
+                    .y = @divFloor(2 * msg.pos.y + msg.size.y, 2),
+                }) catch |err| {
+                    std.log.err("point allocation failed: {}", .{err});
+                    return;
+                };
+                const label = gtk.gtk_label_new(key);
+                gtk.gtk_fixed_put(
                     @ptrCast(fixed),
-                    @ptrCast(entry),
+                    label,
                     msg.pos.x,
                     msg.pos.y,
-                ),
-                .point => {
-                    const key = allocator.dupeSentinel(
-                        u8,
-                        key_buf[0..createKey()],
-                        0,
-                    ) catch |err| {
-                        std.log.err("key copy failed: {}", .{err});
-                        return;
-                    };
-                    map.put(key, .{
-                        .x = @divFloor(2 * msg.pos.x + msg.size.x, 2),
-                        .y = @divFloor(2 * msg.pos.y + msg.size.y, 2),
-                    }) catch |err| {
-                        std.log.err("point allocation failed: {}", .{err});
-                        return;
-                    };
-                    const label = gtk.gtk_label_new(@ptrCast(key));
-                    gtk.gtk_fixed_put(
-                        @ptrCast(fixed),
-                        label,
-                        msg.pos.x,
-                        msg.pos.y,
-                    );
-                },
-                .quit => return,
-            }
-        } else std.Io.sleep(
-            io,
-            .fromMicroseconds(100),
-            .awake,
-        ) catch unreachable;
+                );
+            },
+            .Quit => return,
+        }
     }
 }
 

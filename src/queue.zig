@@ -1,42 +1,34 @@
 const std = @import("std");
 
 pub const Type = enum {
-    done,
-    entry,
-    point,
-    quit,
+    Done,
+    Entry,
+    Point,
+    Quit,
 };
 
 pub const Point = struct {
-    x: c_int,
-    y: c_int,
+    x: c_int = 0,
+    y: c_int = 0,
 };
 
 pub const Message = struct {
-    pos: Point,
-    size: Point,
+    pos: Point = .{},
+    size: Point = .{},
     type: Type,
 };
 
-var threaded = std.Io.Threaded.init_single_threaded;
-const io = threaded.io();
-var queue: [256]Message = undefined;
-var count: usize = 0;
-var head: usize = 0;
-var tail: usize = 0;
+var buffer: [512]Message = undefined;
+var queue: std.Io.Queue(Message) = undefined;
 
-pub fn push(msg: Message) void {
-    while (count == queue.len)
-        std.Io.sleep(io, .fromMicroseconds(100), .awake) catch unreachable;
-    queue[tail] = msg;
-    count += 1;
-    tail = (tail + 1) % queue.len;
+pub fn init() void {
+    queue = std.Io.Queue(Message).init(&buffer);
 }
 
-pub fn pop() ?Message {
-    if (count == 0) return null;
-    const msg = queue[head];
-    count -= 1;
-    head = (head + 1) % queue.len;
-    return msg;
+pub fn push(io: std.Io, msg: Message) void {
+    queue.putOne(io, msg) catch unreachable;
+}
+
+pub fn pop(io: std.Io) Message {
+    return queue.getOne(io) catch unreachable;
 }
