@@ -115,21 +115,32 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator) void {
     }
 }
 
+fn exit(
+    _: *gtk.GClosure,
+    _: *gtk.GValue,
+    _: gtk.guint,
+    _: [*c]const gtk.GValue,
+    _: gtk.gpointer,
+    _: gtk.gpointer,
+) callconv(.c) void {
+    std.process.exit(0);
+}
+
 fn bindKeys() void {
     const accel_group = gtk.gtk_accel_group_new();
     defer gtk.g_object_unref(@ptrCast(accel_group));
-    const clear_closure = gtk.g_cclosure_new(
-        gtk.G_CALLBACK(quit),
+    const exit_closure = gtk.g_cclosure_new(
+        gtk.G_CALLBACK(exit),
         null,
         null,
     );
-    defer gtk.g_closure_unref(clear_closure);
+    defer gtk.g_closure_unref(exit_closure);
     gtk.gtk_accel_group_connect(
         accel_group,
         gtk.GDK_KEY_Escape,
         0,
         0,
-        clear_closure,
+        exit_closure,
     );
     const right_click_closure = gtk.g_cclosure_new(
         gtk.G_CALLBACK(click),
