@@ -79,7 +79,7 @@ fn findActiveWindow(io: std.Io) bool {
             }
         }
     }
-    _ = std.c.printf("No active window found for pid %d\n", pid);
+    std.log.warn("No active window found for pid {}", .{pid});
     return false;
 }
 
