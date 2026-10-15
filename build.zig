@@ -13,7 +13,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_system_libs = &.{
             .{ .name = "atspi-2" },
-            .{ .name = "X11" },
         },
     });
     const gtk = Translator.init(translate_c, .{
@@ -37,7 +36,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-
     const exe = b.addExecutable(.{
         .name = "MouselessDesktop",
         .root_module = b.createModule(.{

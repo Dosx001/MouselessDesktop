@@ -2,31 +2,14 @@ const atspi = @import("atspi");
 const queue = @import("queue.zig");
 const std = @import("std");
 
-var display: ?*atspi.Display = undefined;
-
-pub fn init() !void {
-    display = atspi.XOpenDisplay(null);
-    if (display == null) {
-        std.log.err("XOpenDisplay failed", .{});
-        return error.XOpenDisplay;
-    }
-}
-
-pub fn deinit() void {
-    _ = atspi.XCloseDisplay(display);
-}
-
-pub fn run(io: std.Io) void {
-    queue.push(io, queue.Message{
-        .type = if (findActiveWindow(io))
-            .Done
-        else
-            .Quit
-    });
+pub fn init(io: std.Io) void {
+    queue.push(io, queue.Message{ .type = if (findActiveWindow(io))
+        .Done
+    else
+        .Quit });
 }
 
 fn findActiveWindow(io: std.Io) bool {
-    const pid = activePid();
     for (0..@intCast(atspi.atspi_get_desktop_count())) |i| {
         const desktop: ?*atspi.AtspiAccessible = atspi.atspi_get_desktop(
             @intCast(i),
@@ -38,10 +21,6 @@ fn findActiveWindow(io: std.Io) bool {
                 null,
             );
             defer atspi.g_object_unref(app);
-            if (pid != atspi.atspi_accessible_get_process_id(
-                app,
-                null,
-            )) continue;
             for (0..childCount(app)) |k| {
                 const win = atspi.atspi_accessible_get_child_at_index(
                     app,
@@ -79,7 +58,7 @@ fn findActiveWindow(io: std.Io) bool {
             }
         }
     }
-    std.log.warn("No active window found for pid {}", .{pid});
+    std.log.warn("Active window does not support AT-SPI", .{});
     return false;
 }
 
@@ -245,61 +224,4 @@ fn checkRole(obj: ?*atspi.AtspiAccessible) bool {
         => true,
         else => false,
     };
-}
-
-fn activePid() c_int {
-    var atom = atspi.XInternAtom(display, "_NET_ACTIVE_WINDOW", 1);
-    if (atom == atspi.None) return 0;
-    var actual_type: atspi.Atom = undefined;
-    var actual_format: c_int = undefined;
-    var nitems: c_ulong = undefined;
-    var bytes_after: c_ulong = undefined;
-    var prop: [*c]u8 = undefined;
-    var win: atspi.Window = undefined;
-    if (atspi.XGetWindowProperty(
-        display,
-        atspi.DefaultRootWindow(display),
-        atom,
-        0,
-        1,
-        0,
-        atspi.XA_WINDOW,
-        &actual_type,
-        &actual_format,
-        &nitems,
-        &bytes_after,
-        &prop,
-    ) == atspi.Success) {
-        defer _ = atspi.XFree(prop);
-        if (0 < nitems)
-            win = @as(
-                *atspi.Window,
-                @ptrCast(@alignCast(prop)),
-            ).*;
-    }
-    if (win == 0) return 0;
-    atom = atspi.XInternAtom(display, "_NET_WM_PID", 1);
-    if (atom == atspi.None) return 0;
-    if (atspi.XGetWindowProperty(
-        display,
-        win,
-        atom,
-        0,
-        1,
-        0,
-        atspi.XA_CARDINAL,
-        &actual_type,
-        &actual_format,
-        &nitems,
-        &bytes_after,
-        &prop,
-    ) == atspi.Success) {
-        defer _ = atspi.XFree(prop);
-        if (0 < nitems)
-            return @as(
-                *atspi.pid_t,
-                @ptrCast(@alignCast(prop)),
-            ).*;
-    }
-    return 0;
 }

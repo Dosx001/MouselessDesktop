@@ -19,11 +19,9 @@ pub fn main(init: std.process.Init) !void {
     defer log.deinit();
     try win.init(gpa);
     defer win.deinit();
-    try ml.init();
-    defer ml.deinit();
     _ = std.Thread.spawn(
         .{},
-        ml.run,
+        ml.init,
         .{io},
     ) catch
         return std.log.err("unable to spawn thread", .{});
