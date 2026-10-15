@@ -12,6 +12,7 @@ pub const std_options: std.Options = .{
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const gpa = init.gpa;
+    const arena = init.arena.allocator();
     sig.init();
     log.init();
     queue.init();
@@ -26,6 +27,6 @@ pub fn main(init: std.process.Init) !void {
         .{io},
     ) catch
         return std.log.err("unable to spawn thread", .{});
-    win.run(io, gpa);
+    win.run(io, arena);
     return;
 }

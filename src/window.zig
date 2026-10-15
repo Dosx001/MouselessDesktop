@@ -70,7 +70,10 @@ pub fn deinit() void {
     gtk.gtk_widget_destroy(window);
 }
 
-pub fn run(io: std.Io, allocator: std.mem.Allocator) void {
+pub fn run(
+    io: std.Io,
+    allocator: std.mem.Allocator,
+) void {
     while (true) {
         const msg = queue.pop(io);
         switch (msg.type) {

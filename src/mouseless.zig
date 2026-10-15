@@ -145,7 +145,12 @@ fn parseCollection(
         null,
     );
     defer _ = atspi.g_array_free(matches, 1);
-    const data: [*c][*c]atspi.AtspiAccessible = @ptrCast(@alignCast(matches.*.data));
+    const data: [*c][*c]atspi.AtspiAccessible =
+        @ptrCast(
+            @alignCast(
+                matches.*.data,
+            ),
+        );
     for (0..matches.*.len) |i|
         sendPoint(io, data[i]);
 }
@@ -166,14 +171,13 @@ fn parseChild(
     ) != 1) return;
     if (checkRole(obj)) sendPoint(io, obj);
     for (0..childCount(obj)) |i| {
-        parseChild(
-            io,
-            atspi.atspi_accessible_get_child_at_index(
-                obj,
-                @intCast(i),
-                null,
-            ),
+        const child = atspi.atspi_accessible_get_child_at_index(
+            obj,
+            @intCast(i),
+            null,
         );
+        parseChild(io, child);
+        atspi.g_object_unref(child);
     }
 }
 
