@@ -4,7 +4,19 @@ const queue = @import("queue.zig");
 const std = @import("std");
 const uinput = @import("uinput");
 
-var window: *gtk.GtkWidget = undefined;
+const Mapping = struct {
+    binding: [*c]const u8,
+    data: u32,
+    func: fn (
+        [*c]gtk.struct__GtkWidget,
+        ?*gtk.struct__GVariant,
+        ?*anyopaque,
+    ) callconv(.c) c_int,
+};
+
+var main_loop: ?*gtk.GMainLoop = undefined;
+var controller: ?*gtk.GtkEventController = undefined;
+var window: *gtk.GtkWindow = undefined;
 var fixed: *gtk.GtkWidget = undefined;
 var entry: *gtk.GtkWidget = undefined;
 var height: c_int = 0;
@@ -12,7 +24,7 @@ var width: c_int = 0;
 
 var count: usize = 0;
 const chars = ";ALSKDJFIWOE";
-var key_buf: [4]u8 = [_]u8{ 0, 0, 0, 0 };
+var key_buf: [4]u8 = undefined;
 var map: std.hash_map.StringHashMap(queue.Point) = undefined;
 
 pub fn init(allocator: std.mem.Allocator) !void {
@@ -21,53 +33,105 @@ pub fn init(allocator: std.mem.Allocator) !void {
         std.log.err("map allocation failed: {}", .{err});
         return err;
     };
-    gtk.gtk_init(0, null);
-    window = gtk.gtk_window_new(gtk.GTK_WINDOW_TOPLEVEL);
-    gtk.gtk_window_fullscreen(@ptrCast(window));
-    gtk.gtk_window_set_skip_taskbar_hint(
+    gtk.gtk_init();
+    window = @ptrCast(gtk.gtk_window_new());
+    gtk.gtk_window_fullscreen(window);
+    gtk.gtk_window_set_decorated(window, 0);
+    gtk.gtk_window_set_resizable(window, 0);
+    controller = gtk.gtk_shortcut_controller_new();
+    gtk.gtk_widget_add_controller(
         @ptrCast(window),
-        1,
+        controller,
     );
-    fixed = gtk.gtk_fixed_new();
-    entry = gtk.gtk_entry_new();
     go.gSignalConnect(
         window,
-        "focus-out-event",
-        gtk.G_CALLBACK(quit),
+        "notify::is-active",
+        gtk.G_CALLBACK(check_focus),
         null,
     );
     bindKeys();
-    gtk.gtk_container_add(@ptrCast(window), fixed);
-    const screen = gtk.gtk_window_get_screen(@ptrCast(window));
-    height = gtk.gdk_screen_get_height(screen);
-    width = gtk.gdk_screen_get_width(screen);
-    const visual = gtk.gdk_screen_get_rgba_visual(screen);
-    if (visual != null) gtk.gtk_widget_set_visual(window, visual);
+    fixed = gtk.gtk_fixed_new();
+    entry = gtk.gtk_entry_new();
+    gtk.gtk_widget_set_size_request(
+        entry,
+        100,
+        -1,
+    );
+    go.gSignalConnect(
+        entry,
+        "activate",
+        gtk.G_CALLBACK(left_click),
+        null,
+    );
+    gtk.gtk_window_set_child(
+        window,
+        fixed,
+    );
+    const display = gtk.gtk_widget_get_display(
+        @ptrCast(window),
+    );
+    const monitors = gtk.gdk_display_get_monitors(display);
+    if (0 < gtk.g_list_model_get_n_items(monitors)) {
+        const monitor = gtk.g_list_model_get_item(
+            monitors,
+            0,
+        );
+        defer gtk.g_object_unref(monitor);
+        var geometry: gtk.GdkRectangle = undefined;
+        gtk.gdk_monitor_get_geometry(
+            @ptrCast(monitor),
+            &geometry,
+        );
+        width = geometry.width;
+        height = geometry.height;
+    }
     const css_provider = gtk.gtk_css_provider_new();
-    _ = gtk.gtk_css_provider_load_from_data(
+    gtk.gtk_css_provider_load_from_data(
         css_provider,
         @embedFile("styles.css"),
         -1,
-        null,
     );
-    gtk.gtk_style_context_add_provider_for_screen(
-        screen,
+    gtk.gtk_style_context_add_provider_for_display(
+        display,
         @ptrCast(css_provider),
         gtk.GTK_STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
-}
-
-fn quit(
-    _: *gtk.GtkWidget,
-    _: *gtk.GdkEventFocus,
-    _: gtk.gpointer,
-) callconv(.c) void {
-    gtk.gtk_main_quit();
+    gtk.g_object_unref(css_provider);
+    main_loop = gtk.g_main_loop_new(null, 0);
+    const focus = gtk.gtk_event_controller_focus_new();
+    gtk.gtk_widget_add_controller(
+        @ptrCast(window),
+        focus,
+    );
 }
 
 pub fn deinit() void {
     map.deinit();
-    gtk.gtk_widget_destroy(window);
+    gtk.gtk_window_destroy(window);
+}
+
+fn left_click(
+    _: [*c]gtk.GtkEntry,
+    _: gtk.gpointer,
+) callconv(.c) c_int {
+    _ = click(
+        null,
+        null,
+        gtk.GINT_TO_POINTER(
+            uinput.BTN_LEFT,
+        ),
+    );
+    return 0;
+}
+
+fn check_focus(
+    _: [*c]gtk.GObject,
+    _: [*c]gtk.GParamSpec,
+    _: gtk.gpointer,
+) callconv(.c) void {
+    if (gtk.gtk_window_is_active(window) != 1) {
+        gtk.g_main_loop_quit(main_loop);
+    }
 }
 
 pub fn run(
@@ -78,8 +142,9 @@ pub fn run(
         const msg = queue.pop(io);
         switch (msg.type) {
             .Done => {
-                gtk.gtk_widget_show_all(window);
-                gtk.gtk_main();
+                gtk.gtk_window_present(@ptrCast(window));
+                _ = gtk.gtk_widget_grab_focus(entry);
+                gtk.g_main_loop_run(main_loop);
                 return;
             },
             .Entry => gtk.gtk_fixed_put(
@@ -119,75 +184,50 @@ pub fn run(
 }
 
 fn exit(
-    _: *gtk.GClosure,
-    _: *gtk.GValue,
-    _: gtk.guint,
-    _: [*c]const gtk.GValue,
+    _: [*c]gtk.GtkWidget,
+    _: ?*gtk.GVariant,
     _: gtk.gpointer,
-    _: gtk.gpointer,
-) callconv(.c) void {
-    std.process.exit(0);
+) callconv(.c) c_int {
+    std.posix.system.exit(0);
+    return 0;
 }
 
 fn bindKeys() void {
-    const accel_group = gtk.gtk_accel_group_new();
-    defer gtk.g_object_unref(@ptrCast(accel_group));
-    const exit_closure = gtk.g_cclosure_new(
-        gtk.G_CALLBACK(exit),
-        null,
-        null,
-    );
-    defer gtk.g_closure_unref(exit_closure);
-    gtk.gtk_accel_group_connect(
-        accel_group,
-        gtk.GDK_KEY_Escape,
-        0,
-        0,
-        exit_closure,
-    );
-    const right_click_closure = gtk.g_cclosure_new(
-        gtk.G_CALLBACK(click),
-        gtk.GINT_TO_POINTER(uinput.BTN_RIGHT),
-        null,
-    );
-    defer gtk.g_closure_unref(right_click_closure);
-    gtk.gtk_accel_group_connect(
-        accel_group,
-        gtk.GDK_KEY_Return,
-        gtk.GDK_CONTROL_MASK,
-        0,
-        right_click_closure,
-    );
-    const middle_click_closure = gtk.g_cclosure_new(
-        gtk.G_CALLBACK(click),
-        gtk.GINT_TO_POINTER(uinput.BTN_MIDDLE),
-        null,
-    );
-    defer gtk.g_closure_unref(middle_click_closure);
-    gtk.gtk_accel_group_connect(
-        accel_group,
-        gtk.GDK_KEY_Return,
-        gtk.GDK_MOD1_MASK,
-        0,
-        middle_click_closure,
-    );
-    const left_click_closure = gtk.g_cclosure_new(
-        gtk.G_CALLBACK(click),
-        gtk.GINT_TO_POINTER(uinput.BTN_LEFT),
-        null,
-    );
-    defer gtk.g_closure_unref(left_click_closure);
-    gtk.gtk_accel_group_connect(
-        accel_group,
-        gtk.GDK_KEY_Return,
-        0,
-        0,
-        left_click_closure,
-    );
-    gtk.gtk_window_add_accel_group(
-        @ptrCast(window),
-        accel_group,
-    );
+    const mappings: [3]Mapping = .{
+        .{
+            .binding = "Escape",
+            .data = 0,
+            .func = exit,
+        },
+        .{
+            .binding = "<Alt>Return",
+            .data = uinput.BTN_RIGHT,
+            .func = click,
+        },
+        .{
+            .binding = "<Control>Return",
+            .data = uinput.BTN_MIDDLE,
+            .func = click,
+        },
+    };
+    inline for (mappings) |mapping| {
+        const action = gtk.gtk_callback_action_new(
+            mapping.func,
+            gtk.GINT_TO_POINTER(mapping.data),
+            null,
+        );
+        const trigger = gtk.gtk_shortcut_trigger_parse_string(
+            mapping.binding,
+        );
+        const shortcut = gtk.gtk_shortcut_new(
+            trigger,
+            action,
+        );
+        gtk.gtk_shortcut_controller_add_shortcut(
+            @ptrCast(controller),
+            shortcut,
+        );
+    }
 }
 
 fn uinput_init() c_int {
@@ -230,24 +270,28 @@ fn emit(
 }
 
 fn click(
-    _: *gtk.GClosure,
-    _: *gtk.GValue,
-    _: gtk.guint,
-    _: [*c]const gtk.GValue,
+    _: [*c]gtk.GtkWidget,
+    _: ?*gtk.GVariant,
     data: gtk.gpointer,
-    _: gtk.gpointer,
-) callconv(.c) void {
+) callconv(.c) c_int {
+    const buffer = gtk.gtk_entry_get_buffer(@ptrCast(entry));
     const key = std.ascii.allocUpperString(
         std.heap.c_allocator,
-        std.mem.span(gtk.gtk_entry_get_text(@ptrCast(entry))),
+        std.mem.span(
+            gtk.gtk_entry_buffer_get_text(
+                buffer,
+            ),
+        ),
     ) catch {
         std.log.err("key allocation failed", .{});
-        return;
+        return 1;
     };
     defer std.heap.c_allocator.free(key);
-    const pt = map.get(key) orelse
-        return gtk.gtk_entry_set_text(@ptrCast(entry), "");
-    gtk.gtk_widget_hide(window);
+    const pt = map.get(key) orelse {
+        gtk.gtk_entry_set_buffer(@ptrCast(entry), null);
+        return 1;
+    };
+    gtk.gtk_widget_set_visible(@ptrCast(window), 0);
     const fd = uinput_init();
     defer _ = std.c.close(fd);
     const btn: c_ushort = @intCast(gtk.GPOINTER_TO_INT(data));
@@ -287,6 +331,7 @@ fn click(
     std.Io.sleep(io, .fromMilliseconds(500), .awake) catch unreachable;
     _ = uinput.ioctl(fd, uinput.UI_DEV_DESTROY);
     std.posix.system.exit(0);
+    return 0;
 }
 
 fn createKey() u8 {
