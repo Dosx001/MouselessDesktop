@@ -14,9 +14,9 @@ pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
     const arena = init.arena.allocator();
     sig.init();
-    log.init();
-    queue.init();
+    try log.init(io);
     defer log.deinit();
+    queue.init();
     try win.init(gpa);
     defer win.deinit();
     _ = std.Thread.spawn(

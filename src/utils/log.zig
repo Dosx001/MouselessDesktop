@@ -1,8 +1,29 @@
 const log = @import("log");
 const std = @import("std");
+const builtin = @import("builtin");
 
-pub fn init() void {
+pub fn init(io: std.Io) !void {
     _ = log.notify_init("MouselessDesktop");
+    if (builtin.mode != .debug) {
+        log.notify_set_app_icon(
+            "/usr/share/icons/hicolor/128x128/apps/MouselessDesktop.png",
+        );
+    } else {
+        var buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+        var len = std.process.executableDirPath(
+            io,
+            &buf,
+        ) catch |err| {
+            std.log.err("Failed to get executable path: {}", .{err});
+            return err;
+        };
+        len -= 11;
+        @memcpy(
+            buf[len .. len + 23],
+            "pkg/assets/128x128.png\x00",
+        );
+        log.notify_set_app_icon(&buf);
+    }
 }
 
 pub fn deinit() void {
